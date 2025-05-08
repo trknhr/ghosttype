@@ -1,9 +1,12 @@
 package ui
 
 import (
-	"github.com/trknhr/markov-cli"
+	"fmt"
+	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/trknhr/markov-cli/history"
+	markov "github.com/trknhr/markov-cli/marcov"
 )
 
 type Model struct {
@@ -15,26 +18,23 @@ type Model struct {
 
 func InitialModel() Model {
 	model := markov.NewModel()
-	sampleHistory := []string{
-		"cd project",
-		"ls",
-		"git status",
-		"git add .",
-		"git commit",
-		"cd project",
-		"ls",
-		"docker ps",
-		"docker exec -it db bash",
-		"exit",
+
+	commands, err := history.LoadZshHistory(os.Getenv("HOME") + "/.zsh_history")
+	fmt.Println(commands)
+	if err != nil {
+		fmt.Println("Failed to load history:", err)
+		commands = []string{} // fallback
 	}
-	model.Learn(sampleHistory)
+
+	model.Learn(commands)
 
 	return Model{
 		input:       "",
-		suggestions: sampleHistory[:3],
+		suggestions: commands[:min(3, len(commands))],
 		cursor:      0,
 		markovModel: model,
 	}
+
 }
 
 func (m Model) Init() tea.Cmd {
@@ -56,7 +56,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor++
 			}
 		case "enter":
-			m.input = m.suggestions[m.cursor]
+			selected := m.suggestions[m.cursor]
+			if m.input != "" {
+				m.input += " " + selected
+			} else {
+				m.input = selected
+			}
+
+			return m, tea.Quit
 		default:
 			if len(msg.String()) == 1 {
 				m.input += msg.String()
@@ -65,15 +72,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			if m.markovModel != nil {
-				pred := m.markovModel.PredictNext(m.input)
-				if pred != "" {
-					m.suggestions = []string{pred}
-					m.cursor = 0
+				preds := m.markovModel.PredictNext(m.input)
+				if len(preds) > 0 {
+					m.suggestions = preds
+				} else {
+					m.suggestions = []string{"(no match)"}
 				}
 			}
 		}
 	}
 	return m, nil
+}
+
+func (m Model) Input() string {
+	return m.input
 }
 
 func (m Model) View() string {

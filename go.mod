@@ -2,9 +2,10 @@ module github.com/trknhr/markov-cli
 
 go 1.24.2
 
+require github.com/charmbracelet/bubbletea v1.3.5
+
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
-	github.com/charmbracelet/bubbletea v1.3.5 // indirect
 	github.com/charmbracelet/colorprofile v0.3.1 // indirect
 	github.com/charmbracelet/lipgloss v1.1.0 // indirect
 	github.com/charmbracelet/x/ansi v0.9.2 // indirect
@@ -24,3 +25,5 @@ require (
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.25.0 // indirect
 )
+
+replace github.com/trknhr/markov-cli => ../markov-cli
