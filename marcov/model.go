@@ -52,32 +52,14 @@ func (m *Model) PredictNext(input string) []string {
 		pairs = append(pairs, pair{token, count})
 	}
 
-	// 降順ソート
+	// DESC
 	sort.Slice(pairs, func(i, j int) bool {
 		return pairs[i].count > pairs[j].count
 	})
 
-	// トップN候補を返す（最大3件など）
-	N := 3
-	if len(pairs) < N {
-		N = len(pairs)
-	}
-	results := make([]string, N)
-	for i := 0; i < N; i++ {
+	results := make([]string, len(pairs))
+	for i := 0; i < len(pairs); i++ {
 		results[i] = pairs[i].token
 	}
 	return results
-
 }
-
-// func (m *Model) PredictByPrefix(prefix string) []string {
-// 	var matches []string
-// 	for from, toMap := range m.Transitions {
-// 		if strings.HasPrefix(from, prefix) {
-// 			for cmd := range toMap {
-// 				matches = append(matches, cmd)
-// 			}
-// 		}
-// 	}
-// 	return matches
-// }
