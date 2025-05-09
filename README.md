@@ -1,9 +1,10 @@
-# markov-cli
+# ghosttype
 
-**markov-cli** is a terminal-based command suggestion tool powered by a Markov chain model.  
-It learns your shell history and helps you autocomplete commands in an interactive TUI using the [Bubbletea](https://github.com/charmbracelet/bubbletea) framework.
+**ghosttype** is a smart command suggestion tool for your terminal.  
+It learns from your shell history and suggests the next most likely command using a lightweight Markov chain model.  
+With fuzzy selection powered by `fzf`, ghosttype makes completing commands fast, intuitive, and shell-agnostic.
 
----
+--
 
 ## 🚧 Status: Under Development
 
@@ -14,86 +15,100 @@ Your feedback and contributions are welcome!
 
 ---
 
-## ✨ Features
+## 🚀 Quick Demo
 
-- 🧠 Learns from your `.zsh_history` or `.bash_history`
-- ⚡ Token-based Markov model for smarter suggestions (e.g., `npm` → `run`, `install`, etc.)
-- 🎯 Real-time suggestions as you type
-- ⌨️ Interactive CLI with up/down navigation and selection
-- 🧼 Clears the screen and outputs the final command on exit
+```zsh
+$ git ch▍    # Press Ctrl+P
+> git checkout main
+  git cherry-pick HEAD
+  git checkout -b feature
+```
 
 ---
 
-## 📸 Demo
+## ✨ Features
 
-```
-$ markov-cli
-Command: npm
-
-Suggestions:
-  install
-> run
-  test
-
-# After pressing Enter:
-npm run
-```
+- 📚 Learns from your `~/.zsh_history` or `~/.bash_history`
+- 🧠 Predicts likely next tokens using Markov transitions
+- 🔎 Fuzzy picker with `fzf` to choose completions interactively
+- ⚡ Instant zsh integration with simple keybinding
+- 🧩 Shell-agnostic CLI (can be integrated with bash, fish, etc.)
 
 ---
 
 ## 🛠 Installation
 
+### 1. Install ghosttype
+
 ```bash
-git clone https://github.com/trknhr/markov-cli.git
-cd markov-cli
-go build -o markov-cli
-./markov-cli
+go install github.com/trknhr/ghosttype@latest
+```
+
+### 2. Install fzf (if not already installed)
+
+```bash
+brew install fzf
 ```
 
 ---
 
-## 📂 Directory Structure
+## 🧬 Zsh Integration
+
+Add this to your `~/.zshrc`:
+
+```zsh
+# ghosttype zsh integration script
+function predict() {
+  local input="$BUFFER"
+  local suggestion=$(ghosttype "$input" | fzf --prompt="ghosttype suggestions: ")
+
+  if [[ -n $suggestion ]]; then
+    BUFFER="$suggestion"
+    CURSOR=${#BUFFER}
+    zle reset-prompt
+  fi
+}
+
+zle -N predict
+bindkey '^P' predict  # Trigger suggestion with Ctrl+P
+```
+
+Then apply it:
+
+```bash
+source ~/.zshrc
+```
+
+---
+
+## 🧠 How It Works
+
+1. Parses your shell history (e.g., `.zsh_history`)
+2. Builds a Markov chain of command token transitions
+3. Given a partial input (like `git `), it:
+   - Finds the last token (`git`)
+   - Predicts likely next tokens (`checkout`, `cherry-pick`, etc.)
+   - Prepends the input and prints full completions
+4. `fzf` lets you pick one
+
+---
+
+## 🗂 Directory Structure
 
 ```
 .
-├── history/       # History parsers for bash and zsh
-├── marcov/        # Token-level Markov model implementation
-├── ui/            # Bubbletea-based TUI
-├── main.go        # Entry point
+├── cmd/            # CLI command logic (cobra)
+├── history/        # Shell history loaders
+├── marcov/         # Markov model
+├── script/         # Shell integration scripts
+├── main.go
 ├── go.mod
 └── README.md
 ```
 
 ---
 
-## 🔍 How It Works
-
-- History is loaded from `~/.zsh_history` by default
-- Each line is tokenized (e.g., `git commit -m` → `["git", "commit", "-m"]`)
-- Transitions between tokens are counted and stored as a Markov chain
-- As you type, the last token is used to predict the most likely next token(s)
-- Suggestions are updated dynamically
-
----
-
-## ⌨️ Keyboard Shortcuts
-
-- ↑ / ↓ : Navigate suggestions
-- `Enter` : Add selected token to input and quit
-- `q` or `Ctrl+C` : Quit without output
-
----
-
-## 🧪 Optional Enhancements (Planned)
-
-- Multi-step interaction (keep suggesting until the user confirms)
-- Support for persistent model across sessions
-- Improved UI and fuzzy matching
-- Better integration with shells (`zle`, `eval`, etc.)
-
----
-
-## 📝 License
+## 📜 License
 
 Apache-2.0  
 See [LICENSE](./LICENSE) for full terms.
