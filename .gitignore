@@ -1,0 +1,28 @@
+# Go build artifacts
+bin/
+build/
+dist/
+*.exe
+*.out
+*.test
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Dependency directories
+vendor/
+
+# User config
+.ghosttyperc.yaml
+
+# Cache
+*.cache

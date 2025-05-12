@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// LoadZshHistory reads a .zsh_history file and extracts command lines, ignoring timestamps.
-func LoadZshHistory(path string) ([]string, error) {
+// LoadZshHistoryCommands loads full commands (including multiline) from ~/.zsh_history
+func LoadZshHistoryCommands(path string) ([]string, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -15,27 +15,38 @@ func LoadZshHistory(path string) ([]string, error) {
 	defer file.Close()
 
 	var commands []string
+	var current strings.Builder
 	scanner := bufio.NewScanner(file)
+
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
+		line := scanner.Text()
+
+		// Skip metadata lines
+		if strings.HasPrefix(line, ": ") {
+			// Start of a new command
+			if current.Len() > 0 {
+				commands = append(commands, current.String())
+				current.Reset()
+			}
+			idx := strings.Index(line, ";")
+			if idx != -1 && idx+1 < len(line) {
+				line = line[idx+1:]
+			}
 		}
 
-		// zsh history lines often look like: ": 1683776572:0;git status"
-		if strings.HasPrefix(line, ": ") {
-			if parts := strings.SplitN(line, ";", 2); len(parts) == 2 {
-				commands = append(commands, strings.TrimSpace(parts[1]))
-			}
+		// Handle line continuation (escaped newline)
+		if strings.HasSuffix(line, "\\") {
+			current.WriteString(strings.TrimSuffix(line, "\\"))
+			current.WriteString(" ")
 		} else {
-			// fallback for nonstandard lines
-			commands = append(commands, line)
+			current.WriteString(line)
+			commands = append(commands, current.String())
+			current.Reset()
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
-
 	return commands, nil
 }

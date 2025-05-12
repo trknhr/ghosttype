@@ -1,10 +1,10 @@
 # ghosttype
 
+## ⌨️ Fuzzy Completion with fzf
+
 **ghosttype** is a smart command suggestion tool for your terminal.  
 It learns from your shell history and suggests the next most likely command using a lightweight Markov chain model.  
 With fuzzy selection powered by `fzf`, ghosttype makes completing commands fast, intuitive, and shell-agnostic.
-
---
 
 ## 🚧 Status: Under Development
 
@@ -12,8 +12,6 @@ This project is still in an early development phase.
 **Functionality may be unstable or incomplete. Use at your own risk.**
 
 Your feedback and contributions are welcome!
-
----
 
 ## 🚀 Quick Demo
 
@@ -24,8 +22,6 @@ $ git ch▍    # Press Ctrl+P
   git checkout -b feature
 ```
 
----
-
 ## ✨ Features
 
 - 📚 Learns from your `~/.zsh_history` or `~/.bash_history`
@@ -33,8 +29,6 @@ $ git ch▍    # Press Ctrl+P
 - 🔎 Fuzzy picker with `fzf` to choose completions interactively
 - ⚡ Instant zsh integration with simple keybinding
 - 🧩 Shell-agnostic CLI (can be integrated with bash, fish, etc.)
-
----
 
 ## 🛠 Installation
 
@@ -58,19 +52,19 @@ Add this to your `~/.zshrc`:
 
 ```zsh
 # ghosttype zsh integration script
-function predict() {
+function ghosttype_predict() {
   local input="$BUFFER"
-  local suggestion=$(ghosttype "$input" | fzf --prompt="ghosttype suggestions: ")
-
+  local suggestion=$(ghosttype "$input" | fzf --prompt="ghosttype> " | head -n1)
+  
   if [[ -n $suggestion ]]; then
     BUFFER="$suggestion"
     CURSOR=${#BUFFER}
-    zle reset-prompt
+    zle reset-prompt  
   fi
-}
-
-zle -N predict
-bindkey '^P' predict  # Trigger suggestion with Ctrl+P
+}   
+  
+zle -N ghosttype_predict
+bindkey '^P' ghosttype_predict
 ```
 
 Then apply it:
