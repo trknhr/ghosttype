@@ -1,3 +1,7 @@
+export CGO_ENABLED := 1
+export MACOSX_DEPLOYMENT_TARGET := 15.2
+export CGO_LDFLAGS := -mmacosx-version-min=15.2
+
 APP_NAME := ghosttype
 SRC_DIRS := cmd history marcov
 BUILD_DIR := ./bin
@@ -25,7 +29,7 @@ clean:
 
 fmt:
 	@echo "🎨 Formatting Go code..."
-	$(GO) fmt ./...
+	$(GO_ENV) $(GO) fmt ./...
 
 lint:
 	@echo "🔍 Linting..."
@@ -38,6 +42,12 @@ lint:
 test:
 	@echo "🧪 Running tests..."
 	$(GO) test ./...
+
+dev:
+	@echo "🛠  Running in development mode..."
+	GOFLAGS="" \
+	GHOSTTYPE_LOG_LEVEL=debug \
+	go run main.go $(ARGS)
 
 help:
 	@echo ""
