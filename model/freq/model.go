@@ -45,7 +45,7 @@ func (m *FreqModel) Predict(input string) []model.Suggestion {
 	for i := range matches {
 		results[i] = model.Suggestion{
 			Text:   matches[i].cmd,
-			Score:  float64(matches[i].count), // または 1.0 に固定してもOK
+			Score:  float64(matches[i].count),
 			Source: "freq",
 		}
 	}

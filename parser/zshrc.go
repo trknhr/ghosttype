@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"os"
 	"regexp"
+	"strconv"
 )
 
 var aliasPattern = regexp.MustCompile(`^alias\s+(\w+)=[\"\'](.+)[\"\']`)
@@ -26,9 +27,13 @@ func ExtractZshAliases(path string) ([]Alias, error) {
 		line := scanner.Text()
 		m := aliasPattern.FindStringSubmatch(line)
 		if len(m) == 3 {
+			cmd, err := strconv.Unquote(`"` + m[2] + `"`) // エスケープ解除
+			if err != nil {
+				cmd = m[2] // 失敗したら元のまま
+			}
 			aliases = append(aliases, Alias{
 				Name: m[1],
-				Cmd:  m[2],
+				Cmd:  cmd,
 			})
 		}
 	}

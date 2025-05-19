@@ -28,7 +28,7 @@ var rootCmd = &cobra.Command{
 
 		// 履歴を読み込む
 		historyPath := os.Getenv("HOME") + "/.zsh_history"
-		historyEntries, err := history.LoadZshHistoryCommands(historyPath)
+		historyEntries, err := history.LoadFilteredZshHistory(historyPath)
 		if err != nil {
 			log.Fatalf("failed to load history: %v", err)
 		}
