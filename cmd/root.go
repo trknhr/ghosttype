@@ -12,6 +12,7 @@ import (
 	"github.com/trknhr/ghosttype/internal"
 	"github.com/trknhr/ghosttype/model"
 	"github.com/trknhr/ghosttype/model/alias"
+	"github.com/trknhr/ghosttype/model/context"
 	"github.com/trknhr/ghosttype/model/ensemble"
 	"github.com/trknhr/ghosttype/model/freq"
 	"github.com/trknhr/ghosttype/model/markov"
@@ -56,10 +57,17 @@ var rootCmd = &cobra.Command{
 
 		aliasModel := alias.NewAliasModel(globalDB)
 
+		root, err := os.Getwd()
+		if err != nil {
+			log.Fatalf("failed to get working directory: %v", err)
+		}
+		contextModel := context.NewContextModelFromDir(root)
+
 		model := ensemble.New(
 			markovModel,
 			freqModel,
 			aliasModel,
+			contextModel,
 		)
 
 		// Predict
