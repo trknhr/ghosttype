@@ -7,7 +7,7 @@ SRC_DIRS := cmd history marcov
 BUILD_DIR := ./bin
 GO := go
 
-.PHONY: all build run clean install fmt lint test
+.PHONY: all build run clean install fmt lint test dev
 
 all: build
 
@@ -47,7 +47,7 @@ dev:
 	@echo "🛠  Running in development mode..."
 	GOFLAGS="" \
 	GHOSTTYPE_LOG_LEVEL=debug \
-	go run main.go $(ARGS)
+	go run main.go  $(ARGS) $(ARGS2)
 
 help:
 	@echo ""

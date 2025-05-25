@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package llm;
+
+option go_package = "github.com/trknhr/ghosttype/gen/llm;llm";
+
+// LLM service providing text completion and embedding generation.
+service LLM {
+  // Completes a given input string, optionally using context.
+  rpc Complete (CompleteRequest) returns (CompleteResponse);
+
+  // Generates an embedding vector for the given input text.
+  rpc Embed (EmbedRequest) returns (EmbedResponse);
+}
+
+// Request for text completion.
+message CompleteRequest {
+  // The user's current shell input (e.g., "git pu").
+  string input = 1;
+
+  // Optional JSON-encoded shell context (cwd, env, alias, history, etc).
+  string context_json = 2;
+}
+
+// Response containing the completed command string.
+message CompleteResponse {
+  // Full suggested completion (e.g., "git push origin main").
+  string completion = 1;
+}
+
+// Request to generate embedding from raw text.
+message EmbedRequest {
+  // One or more input texts to embed.
+  repeated string texts = 1;
+}
+
+// Response containing embedding vectors.
+message EmbedResponse {
+  // Each embedding corresponds to a string in the input `texts`.
+  repeated Embedding embeddings = 1;
+}
+
+// A single embedding vector.
+message Embedding {
+  // Floating point vector.
+  repeated float values = 1;
+}

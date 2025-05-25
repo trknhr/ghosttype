@@ -15,8 +15,15 @@ import (
 	"github.com/trknhr/ghosttype/model/context"
 	"github.com/trknhr/ghosttype/model/ensemble"
 	"github.com/trknhr/ghosttype/model/freq"
+	"github.com/trknhr/ghosttype/model/llm"
 	"github.com/trknhr/ghosttype/model/markov"
 )
+
+var filterModels string
+
+func init() {
+	rootCmd.Flags().StringVar(&filterModels, "filter-models", "", "[dev] comma-separated model list to use (markov,freq,llm,alias,context)")
+}
 
 var globalDB *sql.DB
 
@@ -25,16 +32,15 @@ var rootCmd = &cobra.Command{
 	Short: "Suggest command completions based on shell history",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		prefix := strings.TrimSpace(os.Args[1])
+		prefix := strings.TrimSpace(args[0])
 
-		// 履歴を読み込む
+		// Loding history
 		historyPath := os.Getenv("HOME") + "/.zsh_history"
 		historyEntries, err := history.LoadFilteredZshHistory(historyPath)
 		if err != nil {
 			log.Fatalf("failed to load history: %v", err)
 		}
 
-		// コマンド分割（セミコロンや &, | で分割）
 		var cleaned []string
 		for _, entry := range historyEntries {
 			splits := strings.FieldsFunc(entry, func(r rune) bool {
@@ -48,27 +54,44 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		// モデル初期化
-		markovModel := markov.NewModel()
-		markovModel.Learn(cleaned)
+		enabled := map[string]bool{}
 
-		freqModel := freq.NewModel()
-		freqModel.Learn(cleaned)
-
-		aliasModel := alias.NewAliasModel(globalDB)
-
-		root, err := os.Getwd()
-		if err != nil {
-			log.Fatalf("failed to get working directory: %v", err)
+		if filterModels == "" {
+			// Turn on all models
+			enabled["markov"] = true
+			enabled["freq"] = true
+			enabled["alias"] = true
+			enabled["context"] = true
+			enabled["llm"] = true
+		} else {
+			for _, name := range strings.Split(filterModels, ",") {
+				enabled[strings.TrimSpace(name)] = true
+			}
 		}
-		contextModel := context.NewContextModelFromDir(root)
+		var models []model.SuggestModel
 
-		model := ensemble.New(
-			markovModel,
-			freqModel,
-			aliasModel,
-			contextModel,
-		)
+		if enabled["markov"] {
+			m := markov.NewModel()
+			m.Learn(cleaned)
+			models = append(models, m)
+		}
+		if enabled["freq"] {
+			m := freq.NewModel()
+			m.Learn(cleaned)
+			models = append(models, m)
+		}
+		if enabled["alias"] {
+			models = append(models, alias.NewAliasModel(globalDB))
+		}
+		if enabled["context"] {
+			root, _ := os.Getwd()
+			models = append(models, context.NewContextModelFromDir(root))
+		}
+		if enabled["llm"] {
+			models = append(models, llm.NewLLMRemoteModel("llama3.2", 2.0))
+		}
+
+		model := ensemble.New(models...)
 
 		// Predict
 		results := model.Predict(prefix)
@@ -84,28 +107,4 @@ func Execute(db *sql.DB) error {
 	go internal.SyncAliasesAsync(db)
 
 	return rootCmd.Execute()
-}
-
-func wrapModel(source string, weight float64, predictFunc func(string) []model.Suggestion) model.SuggestModel {
-	return &wrappedModel{
-		source:      source,
-		weightValue: weight,
-		predictFunc: predictFunc,
-	}
-}
-
-type wrappedModel struct {
-	source      string
-	weightValue float64
-	predictFunc func(string) []model.Suggestion
-}
-
-func (m *wrappedModel) Learn([]string) {}
-
-func (m *wrappedModel) Predict(input string) []model.Suggestion {
-	return m.predictFunc(input)
-}
-
-func (m *wrappedModel) Weight() float64 {
-	return m.weightValue
 }
