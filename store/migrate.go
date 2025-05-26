@@ -3,6 +3,8 @@ package store
 import (
 	"database/sql"
 	"fmt"
+
+	_ "github.com/tursodatabase/go-libsql"
 )
 
 func Migrate(db *sql.DB) error {
@@ -19,6 +21,14 @@ func Migrate(db *sql.DB) error {
 			path TEXT NOT NULL,
 			mtime INTEGER NOT NULL
 		);`,
+		`CREATE TABLE IF NOT EXISTS embeddings (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			source TEXT NOT NULL,
+			text TEXT NOT NULL,
+			emb F32_BLOB(768),
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);`,
+		`CREATE INDEX IF NOT EXISTS embeddings_idx ON embeddings(libsql_vector_idx(emb));`,
 	}
 
 	for _, stmt := range schema {

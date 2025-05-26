@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/spf13/cobra"
 	"github.com/trknhr/ghosttype/history"
@@ -13,6 +14,7 @@ import (
 	"github.com/trknhr/ghosttype/model"
 	"github.com/trknhr/ghosttype/model/alias"
 	"github.com/trknhr/ghosttype/model/context"
+	"github.com/trknhr/ghosttype/model/embedding"
 	"github.com/trknhr/ghosttype/model/ensemble"
 	"github.com/trknhr/ghosttype/model/freq"
 	"github.com/trknhr/ghosttype/model/llm"
@@ -26,6 +28,10 @@ func init() {
 }
 
 var globalDB *sql.DB
+
+func isValidUTF8(s string) bool {
+	return utf8.ValidString(s)
+}
 
 var rootCmd = &cobra.Command{
 	Use:   "ghosttype <prefix>",
@@ -48,7 +54,8 @@ var rootCmd = &cobra.Command{
 			})
 			for _, s := range splits {
 				s = strings.TrimSpace(s)
-				if s != "" {
+
+				if s != "" && utf8.ValidString(s) {
 					cleaned = append(cleaned, s)
 				}
 			}
@@ -63,6 +70,7 @@ var rootCmd = &cobra.Command{
 			enabled["alias"] = true
 			enabled["context"] = true
 			enabled["llm"] = true
+			enabled["embedding"] = true
 		} else {
 			for _, name := range strings.Split(filterModels, ",") {
 				enabled[strings.TrimSpace(name)] = true
@@ -89,6 +97,12 @@ var rootCmd = &cobra.Command{
 		}
 		if enabled["llm"] {
 			models = append(models, llm.NewLLMRemoteModel("llama3.2", 2.0))
+		}
+
+		if enabled["embedding"] {
+			m := embedding.NewModel(globalDB, 0.9)
+			m.Learn(cleaned)
+			models = append(models, m)
 		}
 
 		model := ensemble.New(models...)

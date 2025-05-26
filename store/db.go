@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/trknhr/ghosttype/internal/logger.go"
+	_ "github.com/tursodatabase/go-libsql"
 )
 
 func OpenDefaultDB() (*sql.DB, error) {
