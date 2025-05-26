@@ -38,7 +38,7 @@ type ollamaResponse struct {
 	Response string `json:"response"`
 }
 
-func (m *LLMRemoteModel) Predict(input string) []model.Suggestion {
+func (m *LLMRemoteModel) Predict(input string) ([]model.Suggestion, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	logger.Debug("[llm] llm predict")
@@ -61,33 +61,33 @@ Output:
 	})
 	if err != nil {
 		logger.Debug("[llm] request marshal failed: %v", err)
-		return nil
+		return nil, err
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", "http://localhost:11434/api/generate", bytes.NewBuffer(reqBody))
 	if err != nil {
 		logger.Debug("[llm] http request creation failed: %v", err)
-		return nil
+		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := m.client.Do(httpReq)
 	if err != nil {
 		logger.Debug("[llm] ollama request failed: %v", err)
-		return nil
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		logger.Debug("[llm] read error: %v", err)
-		return nil
+		return nil, err
 	}
 
 	var ollamaResp ollamaResponse
 	if err := json.Unmarshal(body, &ollamaResp); err != nil {
 		logger.Debug("[llm] parse error: %v", err)
-		return nil
+		return nil, err
 	}
 
 	logger.Debug("[llm] response: %v", ollamaResp.Response)
@@ -104,11 +104,11 @@ Output:
 			})
 		}
 	}
-	return suggestions
+	return suggestions, nil
 }
 
-func (m *LLMRemoteModel) Learn(entries []string) {
-	// read-only
+func (m *LLMRemoteModel) Learn(entries []string) error {
+	return nil
 }
 
 func (m *LLMRemoteModel) Weight() float64 {

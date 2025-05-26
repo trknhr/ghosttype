@@ -12,7 +12,7 @@ type ContextModel struct {
 	Commands []string
 }
 
-func NewContextModelFromDir(projectRoot string) *ContextModel {
+func NewContextModelFromDir(projectRoot string) model.SuggestModel {
 	cmds := []string{}
 
 	if npmCmds, err := utils.ExtractNpmScripts(filepath.Join(projectRoot, "package.json")); err == nil {
@@ -28,11 +28,12 @@ func NewContextModelFromDir(projectRoot string) *ContextModel {
 	return &ContextModel{Commands: cmds}
 }
 
-func (m *ContextModel) Learn(_ []string) {
+func (m *ContextModel) Learn(_ []string) error {
 	// no-op: context is static
+	return nil
 }
 
-func (m *ContextModel) Predict(input string) []model.Suggestion {
+func (m *ContextModel) Predict(input string) ([]model.Suggestion, error) {
 	var out []model.Suggestion
 	for _, cmd := range m.Commands {
 		if strings.HasPrefix(cmd, input) {
@@ -43,9 +44,9 @@ func (m *ContextModel) Predict(input string) []model.Suggestion {
 			})
 		}
 	}
-	return out
+	return out, nil
 }
 
 func (m *ContextModel) Weight() float64 {
-	return 1 // lower than freq or markov
+	return 1
 }

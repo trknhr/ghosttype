@@ -1,6 +1,7 @@
 package ensemble
 
 import (
+	"errors"
 	"sort"
 
 	"github.com/trknhr/ghosttype/model"
@@ -10,25 +11,35 @@ type Ensemble struct {
 	Models []model.SuggestModel
 }
 
-func New(models ...model.SuggestModel) *Ensemble {
+func New(models ...model.SuggestModel) model.SuggestModel {
 	return &Ensemble{Models: models}
 }
 
-func (e *Ensemble) Learn(entries []string) {
+func (e *Ensemble) Learn(entries []string) error {
+	var allErr error
 	for _, m := range e.Models {
-		m.Learn(entries)
+		err := m.Learn(entries)
+		if err != nil {
+			allErr = errors.Join(allErr, err)
+		}
 	}
+
+	return allErr
 }
 
-func (e *Ensemble) Predict(input string) []string {
+func (e *Ensemble) Predict(input string) ([]model.Suggestion, error) {
 	type ranked struct {
 		Text  string
 		Score float64
 	}
 	scoreMap := make(map[string]float64)
 
+	var allErr error
 	for _, model := range e.Models {
-		suggestions := model.Predict(input)
+		suggestions, err := model.Predict(input)
+		if err != nil {
+			allErr = errors.Join(allErr, err)
+		}
 		weight := model.Weight()
 		for _, s := range suggestions {
 			scoreMap[s.Text] += s.Score * weight
@@ -43,9 +54,13 @@ func (e *Ensemble) Predict(input string) []string {
 		return rankedList[i].Score > rankedList[j].Score
 	})
 
-	results := make([]string, len(rankedList))
+	results := make([]model.Suggestion, len(rankedList))
 	for i := range rankedList {
-		results[i] = rankedList[i].Text
+		results[i].Text = rankedList[i].Text
 	}
-	return results
+	return results, allErr
+}
+
+func (m *Ensemble) Weight() float64 {
+	return 0
 }

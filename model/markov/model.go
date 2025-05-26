@@ -18,7 +18,7 @@ func NewModel() model.SuggestModel {
 	}
 }
 
-func (m *MarkovModel) Learn(entries []string) {
+func (m *MarkovModel) Learn(entries []string) error {
 	for _, entry := range entries {
 		tokens := strings.Fields(entry)
 		for i := 0; i < len(tokens)-1; i++ {
@@ -31,18 +31,19 @@ func (m *MarkovModel) Learn(entries []string) {
 			m.Transitions[from][to]++
 		}
 	}
+	return nil
 }
 
-func (m *MarkovModel) Predict(input string) []model.Suggestion {
+func (m *MarkovModel) Predict(input string) ([]model.Suggestion, error) {
 	tokens := strings.Fields(input)
 	if len(tokens) == 0 {
-		return nil
+		return nil, fmt.Errorf("input is empty or contains only whitespace")
 	}
 	last := tokens[len(tokens)-1]
 
 	nextMap, ok := m.Transitions[last]
 	if !ok || len(nextMap) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// Order by score
@@ -69,7 +70,7 @@ func (m *MarkovModel) Predict(input string) []model.Suggestion {
 			Source: "markov",
 		}
 	}
-	return results
+	return results, nil
 }
 
 func (m *MarkovModel) Weight() float64 {

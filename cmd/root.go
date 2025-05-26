@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/trknhr/ghosttype/history"
 	"github.com/trknhr/ghosttype/internal"
+	"github.com/trknhr/ghosttype/internal/logger.go"
 	"github.com/trknhr/ghosttype/model"
 	"github.com/trknhr/ghosttype/model/alias"
 	"github.com/trknhr/ghosttype/model/context"
@@ -108,9 +109,13 @@ var rootCmd = &cobra.Command{
 		model := ensemble.New(models...)
 
 		// Predict
-		results := model.Predict(prefix)
+		results, err := model.Predict(prefix)
+		if err != nil {
+			logger.Error("some models failed during Predict: %v", err)
+		}
+
 		for _, r := range results {
-			fmt.Println(r)
+			fmt.Println(r.Text)
 		}
 	},
 }

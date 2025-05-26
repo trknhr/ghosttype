@@ -15,11 +15,12 @@ func NewAliasModel(db *sql.DB) model.SuggestModel {
 	return &AliasModel{db: db}
 }
 
-func (m *AliasModel) Learn(entries []string) {
+func (m *AliasModel) Learn(entries []string) error {
 	// alias doen't learn
+	return nil
 }
 
-func (m *AliasModel) Predict(input string) []model.Suggestion {
+func (m *AliasModel) Predict(input string) ([]model.Suggestion, error) {
 	query := `
 		SELECT name, cmd FROM aliases
 		WHERE name LIKE ? OR cmd LIKE ?
@@ -27,7 +28,7 @@ func (m *AliasModel) Predict(input string) []model.Suggestion {
 	`
 	rows, err := m.db.Query(query, input+"%")
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -44,7 +45,7 @@ func (m *AliasModel) Predict(input string) []model.Suggestion {
 			Source: "alias",
 		})
 	}
-	return results
+	return results, nil
 }
 
 func (m *AliasModel) Weight() float64 {

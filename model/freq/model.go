@@ -15,16 +15,17 @@ func NewModel() model.SuggestModel {
 	return &FreqModel{Counts: make(map[string]int)}
 }
 
-func (m *FreqModel) Learn(entries []string) {
+func (m *FreqModel) Learn(entries []string) error {
 	for _, entry := range entries {
 		cmd := strings.TrimSpace(entry)
 		if cmd != "" {
 			m.Counts[cmd]++
 		}
 	}
+	return nil
 }
 
-func (m *FreqModel) Predict(input string) []model.Suggestion {
+func (m *FreqModel) Predict(input string) ([]model.Suggestion, error) {
 	type pair struct {
 		cmd   string
 		count int
@@ -49,7 +50,7 @@ func (m *FreqModel) Predict(input string) []model.Suggestion {
 			Source: "freq",
 		}
 	}
-	return results
+	return results, nil
 }
 
 func (m *FreqModel) Weight() float64 {

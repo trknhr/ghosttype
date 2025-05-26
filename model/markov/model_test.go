@@ -54,8 +54,11 @@ func TestMarkovModel_LearnAndPredict(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := modelMarkov.Predict(tt.input)
+		got, err := modelMarkov.Predict(tt.input)
 
+		if err != nil {
+			t.Errorf("Predict(%q) returned unexpected error: %v", tt.input, err)
+		}
 		// Compare the predicted results with expected output
 		if !reflect.DeepEqual(got, tt.expected) {
 			t.Errorf("Predict(%q) mismatch.\nExpected: %#v\nGot:      %#v", tt.input, tt.expected, got)

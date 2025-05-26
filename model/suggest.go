@@ -7,7 +7,7 @@ type Suggestion struct {
 }
 
 type SuggestModel interface {
-	Learn(entries []string)
-	Predict(input string) []Suggestion
+	Learn(entries []string) error
+	Predict(input string) ([]Suggestion, error)
 	Weight() float64
 }
