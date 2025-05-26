@@ -7,7 +7,7 @@ SRC_DIRS := cmd history marcov
 BUILD_DIR := ./bin
 GO := go
 
-.PHONY: all build run clean install fmt lint test dev
+.PHONY: all build run clean install fmt lint test dev cover-html
 
 all: build
 
@@ -41,7 +41,11 @@ lint:
 
 test:
 	@echo "🧪 Running tests..."
-	$(GO) test ./...
+	$(GO) test -cover ./...
+
+cover-html:
+	go test -coverprofile=cover.out ./...
+	go tool cover -html=cover.out
 
 dev:
 	@echo "🛠  Running in development mode..."

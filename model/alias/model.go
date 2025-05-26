@@ -1,46 +1,31 @@
 package alias
 
 import (
-	"database/sql"
-	"strings"
-
 	"github.com/trknhr/ghosttype/model"
 )
 
 type AliasModel struct {
-	db *sql.DB
+	store AliasStore
 }
 
-func NewAliasModel(db *sql.DB) model.SuggestModel {
-	return &AliasModel{db: db}
+func NewAliasModel(aliasStore AliasStore) model.SuggestModel {
+	return &AliasModel{store: aliasStore}
 }
 
 func (m *AliasModel) Learn(entries []string) error {
-	// alias doen't learn
 	return nil
 }
 
 func (m *AliasModel) Predict(input string) ([]model.Suggestion, error) {
-	query := `
-		SELECT name, cmd FROM aliases
-		WHERE name LIKE ? OR cmd LIKE ?
-		ORDER BY updated_at DESC LIMIT 10
-	`
-	rows, err := m.db.Query(query, input+"%")
+	entries, err := m.store.QueryAliases(input)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
 	var results []model.Suggestion
-	for rows.Next() {
-		var name, cmd string
-		if err := rows.Scan(&name, &cmd); err != nil {
-			continue
-		}
-
+	for _, e := range entries {
 		results = append(results, model.Suggestion{
-			Text:   strings.TrimSpace(name),
+			Text:   e.Name,
 			Score:  1.0,
 			Source: "alias",
 		})

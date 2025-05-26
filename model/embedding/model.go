@@ -1,22 +1,22 @@
 package embedding
 
 import (
-	"database/sql"
 	"errors"
 
 	"github.com/trknhr/ghosttype/internal/logger.go"
 	"github.com/trknhr/ghosttype/model"
+	"github.com/trknhr/ghosttype/ollama"
 )
 
 type EmbeddingModel struct {
-	weight float64
-	store  *EmbeddingStore
+	store  EmbeddingStore
+	client ollama.OllamaClient
 }
 
-func NewModel(db *sql.DB, weight float64) model.SuggestModel {
+func NewModel(store EmbeddingStore, client ollama.OllamaClient) model.SuggestModel {
 	return &EmbeddingModel{
-		weight: weight,
-		store:  &EmbeddingStore{DB: db},
+		store:  store,
+		client: client,
 	}
 }
 
@@ -29,21 +29,29 @@ func (m *EmbeddingModel) Learn(entries []string) error {
 			continue
 		}
 
-		vec := embedViaOllama(entry)
-		err := m.store.Save("history", entry, vec)
+		resp, err := m.client.Embed(entry)
 		if err != nil {
 			logger.Debug("failed to save embedding: %v", err)
 			allErr = errors.Join(allErr, err)
+			continue
+		}
 
+		err = m.store.Save("history", entry, resp.Embedding)
+		if err != nil {
+			logger.Debug("failed to save embedding: %v", err)
+			allErr = errors.Join(allErr, err)
 		}
 	}
 	return allErr
 }
 
 func (m *EmbeddingModel) Predict(input string) ([]model.Suggestion, error) {
-	queryVec := embedViaOllama(input)
+	resp, err := m.client.Embed(input)
+	if err != nil {
+		return nil, err
+	}
 
-	suggestions, err := m.store.SearchSimilar(queryVec, "history", 10, 0.3)
+	suggestions, err := m.store.SearchSimilar(resp.Embedding, "history", 10, 0.5)
 	if err != nil {
 		return nil, err
 	}
@@ -58,5 +66,5 @@ func (m *EmbeddingModel) Predict(input string) ([]model.Suggestion, error) {
 }
 
 func (m *EmbeddingModel) Weight() float64 {
-	return m.weight
+	return 0.6
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/trknhr/ghosttype/model/ensemble"
 	"github.com/trknhr/ghosttype/model/freq"
 	"github.com/trknhr/ghosttype/model/markov"
+	"github.com/trknhr/ghosttype/ollama"
 )
 
 var filterModels string
@@ -61,6 +62,7 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
+		ollamaClient := ollama.NewHTTPClient("llama3.2", "nomic-embed-text")
 		enabled := map[string]bool{}
 
 		if filterModels == "" {
@@ -89,7 +91,7 @@ var rootCmd = &cobra.Command{
 			models = append(models, m)
 		}
 		if enabled["alias"] {
-			models = append(models, alias.NewAliasModel(globalDB))
+			models = append(models, alias.NewAliasModel(alias.NewSQLAliasStore(globalDB)))
 		}
 		if enabled["context"] {
 			root, _ := os.Getwd()
@@ -101,7 +103,7 @@ var rootCmd = &cobra.Command{
 		}
 
 		if enabled["embedding"] {
-			m := embedding.NewModel(globalDB, 0.9)
+			m := embedding.NewModel(embedding.NewEmbeddingStore(globalDB), ollamaClient)
 			m.Learn(cleaned)
 			models = append(models, m)
 		}
