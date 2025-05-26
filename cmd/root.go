@@ -17,7 +17,6 @@ import (
 	"github.com/trknhr/ghosttype/model/embedding"
 	"github.com/trknhr/ghosttype/model/ensemble"
 	"github.com/trknhr/ghosttype/model/freq"
-	"github.com/trknhr/ghosttype/model/llm"
 	"github.com/trknhr/ghosttype/model/markov"
 )
 
@@ -96,7 +95,8 @@ var rootCmd = &cobra.Command{
 			models = append(models, context.NewContextModelFromDir(root))
 		}
 		if enabled["llm"] {
-			models = append(models, llm.NewLLMRemoteModel("llama3.2", 2.0))
+			// latency of llm prediction is bad. TBD
+			// models = append(models, llm.NewLLMRemoteModel("llama3.2", 2.0))
 		}
 
 		if enabled["embedding"] {
