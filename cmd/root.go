@@ -126,6 +126,7 @@ func Execute(db *sql.DB) error {
 	globalDB = db
 
 	go internal.SyncAliasesAsync(db)
+	rootCmd.AddCommand(TuiCmd)
 
 	return rootCmd.Execute()
 }
