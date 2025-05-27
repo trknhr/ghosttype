@@ -1,34 +1,54 @@
 # ghosttype
 
-## ⌨️ Fuzzy Completion with fzf
+## ⌨️ Terminal Command Prediction
 
-**ghosttype** is a smart command suggestion tool for your terminal.  
-It learns from your shell history and suggests the next most likely command using a lightweight Markov chain model.  
-With fuzzy selection powered by `fzf`, ghosttype makes completing commands fast, intuitive, and shell-agnostic.
+**ghosttype** is a smart command suggestion tool for your terminal.
+It learns from your shell history and context, and suggests the next most likely command using a combination of:
 
-## 🚧 Status: Under Development
+* 🔁 Markov chains
+* 📊 Frequency analysis
+* 🧠 Embedding similarity
+* 💾 Aliases from your shell config
+* 📦 Project context (e.g. npm, Makefile, pom.xml)
 
-This project is still in an early development phase.  
-**Functionality may be unstable or incomplete. Use at your own risk.**
+It supports both TUI and fuzzy `fzf` mode for selection.
 
-Your feedback and contributions are welcome!
+---
 
-## 🚀 Quick Demo
+## 🚧 Status: Active Development
+
+Ghosttype is still under active development.
+Expect occasional breaking changes. Contributions and issue reports are welcome!
+
+---
+
+## 🚀 Demo
 
 ```zsh
-$ git ch▍    # Press Ctrl+P
+$ git ch▍    # Press Ctrl+P (TUI mode)
 > git checkout main
   git cherry-pick HEAD
   git checkout -b feature
 ```
 
+Or:
+
+```zsh
+$ ghosttype git ch | fzf
+```
+
+---
+
 ## ✨ Features
 
-- 📚 Learns from your `~/.zsh_history` or `~/.bash_history`
-- 🧠 Predicts likely next tokens using Markov transitions
-- 🔎 Fuzzy picker with `fzf` to choose completions interactively
-- ⚡ Instant zsh integration with simple keybinding
-- 🧩 Shell-agnostic CLI (can be integrated with bash, fish, etc.)
+* 📚 Learns from `~/.zsh_history` or `~/.bash_history`
+* 🤖 Embeds historical commands via LLM-powered vector search
+* 🧠 Predicts likely next commands using multiple models (Markov, freq, embedding, etc.)
+* 🔍 `fzf` and 🖥️ TUI interface (via Bubble Tea)
+* 📂 Context-aware suggestions from `Makefile`, `package.json`, `pom.xml`, etc.
+* ⚡ Zsh keybinding integration
+
+---
 
 ## 🛠 Installation
 
@@ -38,7 +58,7 @@ $ git ch▍    # Press Ctrl+P
 go install github.com/trknhr/ghosttype@latest
 ```
 
-### 2. Install fzf (if not already installed)
+### 2. Install fzf (optional)
 
 ```bash
 brew install fzf
@@ -46,12 +66,9 @@ brew install fzf
 
 ---
 
-## 🧬 Zsh Integration
-
-Add this to your `~/.zshrc`:
+## 🧬 Zsh Integration (fzf mode)
 
 ```zsh
-# ghosttype zsh integration script
 function ghosttype_predict() {
   local input="$BUFFER"
   local suggestion=$(ghosttype "$input" | fzf --prompt="ghosttype> " | head -n1)
@@ -59,50 +76,68 @@ function ghosttype_predict() {
   if [[ -n $suggestion ]]; then
     BUFFER="$suggestion"
     CURSOR=${#BUFFER}
-    zle reset-prompt  
+    zle reset-prompt
   fi
-}   
-  
+}
+
 zle -N ghosttype_predict
 bindkey '^P' ghosttype_predict
 ```
 
-Then apply it:
+---
 
-```bash
-source ~/.zshrc
+## 🖥️ Zsh Integration (TUI mode)
+
+```zsh
+function ghosttype_predict() {
+  local tmp=$(mktemp /tmp/ghosttype.XXXX)
+  ghosttype tui --out-file "$tmp" </dev/tty >/dev/tty 2>/dev/tty
+  if [[ -s "$tmp" ]]; then
+    BUFFER=$(<"$tmp")
+    CURSOR=${#BUFFER}
+    zle reset-prompt
+  fi
+  rm -f "$tmp"
+}
+
+zle -N ghosttype_predict
+bindkey '^P' ghosttype_predict
 ```
 
 ---
 
-## 🧠 How It Works
+## 🧠 Architecture
 
-1. Parses your shell history (e.g., `.zsh_history`)
-2. Builds a Markov chain of command token transitions
-3. Given a partial input (like `git `), it:
-   - Finds the last token (`git`)
-   - Predicts likely next tokens (`checkout`, `cherry-pick`, etc.)
-   - Prepends the input and prints full completions
-4. `fzf` lets you pick one
+Ghosttype uses an ensemble of models:
+
+* `markov`: Lightweight transition-based predictor
+* `freq`: Frequency-based suggestion engine
+* `alias`: Shell aliases from `.zshrc`/`.bashrc`
+* `context`: Targets from `Makefile`, `package.json`, `pom.xml`, etc.
+* `embedding`: LLM-generated vector search powered by `ollama`
+
+All models implement a unified `SuggestModel` interface and are combined via `ensemble.Model`.
 
 ---
 
-## 🗂 Directory Structure
+## 🗂 Project Structure
 
 ```
 .
-├── cmd/            # CLI command logic (cobra)
-├── history/        # Shell history loaders
-├── marcov/         # Markov model
-├── script/         # Shell integration scripts
+├── cmd/            # CLI (tui, suggest, root)
+├── history/        # Loaders for bash/zsh history
+├── model/          # All prediction models
+├── internal/       # Logging, utils, alias sync
+├── ollama/         # LLM/embedding interface
+├── parser/         # RC and alias parsing
+├── script/         # Shell helper scripts
 ├── main.go
-├── go.mod
-└── README.md
+└── go.mod
 ```
 
 ---
 
 ## 📜 License
 
-Apache-2.0  
+Apache-2.0
 See [LICENSE](./LICENSE) for full terms.
