@@ -89,19 +89,17 @@ bindkey '^P' ghosttype_predict
 ## 🖥️ Zsh Integration (TUI mode)
 
 ```zsh
+# Predict a command using ghosttype + TUI, then replace current shell input with the selection
 function ghosttype_predict() {
-  local tmp=$(mktemp /tmp/ghosttype.XXXX)
-  ghosttype tui --out-file "$tmp" </dev/tty >/dev/tty 2>/dev/tty
-  if [[ -s "$tmp" ]]; then
-    BUFFER=$(<"$tmp")
+  local result=$(ghosttype tui)
+  if [[ -n "$result" ]]; then
+    BUFFER="$result"
     CURSOR=${#BUFFER}
     zle reset-prompt
   fi
-  rm -f "$tmp"
 }
-
 zle -N ghosttype_predict
-bindkey '^P' ghosttype_predict
+bindkey '^p' ghosttype_predict
 ```
 
 ---

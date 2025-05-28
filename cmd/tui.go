@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
+	"github.com/trknhr/ghosttype/internal/logger.go"
 	"github.com/trknhr/ghosttype/model"
 )
 
@@ -41,7 +42,16 @@ var TuiCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		p := tea.NewProgram(model, tea.WithAltScreen())
+		tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
+		if err != nil {
+			logger.Error("%v", err)
+		}
+		defer tty.Close()
+
+		p := tea.NewProgram(model, tea.WithAltScreen(),
+			tea.WithInput(tty),
+			tea.WithOutput(tty),
+		)
 		if _, err := p.Run(); err != nil {
 			return fmt.Errorf("failed to run TUI: %w", err)
 		}
@@ -132,18 +142,16 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.list.SetSize(msg.Width, msg.Height-4)
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c":
+		switch msg.Type {
+		case tea.KeyCtrlC:
 			return m, tea.Quit
-		case "enter":
-			if !m.input.Focused() {
-				if item, ok := m.list.SelectedItem().(suggestionItem); ok {
-					m.selected = item.text
-					return m, tea.Quit
-				}
+		case tea.KeyEnter:
+			if item, ok := m.list.SelectedItem().(suggestionItem); ok {
+				m.selected = item.text
+				m.input.SetValue(item.text)
+				return m, tea.Quit
 			}
-
-		case "up", "down":
+		case tea.KeyUp, tea.KeyDown:
 			m.input.Blur()
 		default:
 			if !m.input.Focused() {
@@ -151,10 +159,7 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.input.Focus()
 			}
 
-			if !strings.Contains(msg.String(), "[A") && !strings.Contains(msg.String(), "[B") {
-				m.input, _ = m.input.Update(msg)
-			}
-
+			m.input, _ = m.input.Update(msg)
 		}
 	}
 
