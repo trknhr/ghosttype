@@ -11,10 +11,6 @@ It learns from your shell history and context, and suggests the next most likely
 * 💾 Aliases from your shell config
 * 📦 Project context (e.g. npm, Makefile, pom.xml)
 
-It supports both TUI and fuzzy `fzf` mode for selection.
-
----
-
 ## 🚧 Status: Active Development
 
 Ghosttype is still under active development.
@@ -25,16 +21,15 @@ Expect occasional breaking changes. Contributions and issue reports are welcome!
 ## 🚀 Demo
 
 ```zsh
-$ git ch▍    # Press Ctrl+P (TUI mode)
-> git checkout main
-  git cherry-pick HEAD
-  git checkout -b feature
-```
+$ git ch▍    # Press Ctrl+P (zsh Integration)
 
-Or:
-
-```zsh
-$ ghosttype git ch | fzf
+   Suggestions                                            
+                                                          
+  32 items                                                
+                                                          
+> git checkout main                                       
+  git checkout add-slim-version                           
+  git checkout hoge                                       
 ```
 
 ---
@@ -44,7 +39,6 @@ $ ghosttype git ch | fzf
 * 📚 Learns from `~/.zsh_history` or `~/.bash_history`
 * 🤖 Embeds historical commands via LLM-powered vector search
 * 🧠 Predicts likely next commands using multiple models (Markov, freq, embedding, etc.)
-* 🔍 `fzf` and 🖥️ TUI interface (via Bubble Tea)
 * 📂 Context-aware suggestions from `Makefile`, `package.json`, `pom.xml`, etc.
 * ⚡ Zsh keybinding integration
 
@@ -58,40 +52,12 @@ $ ghosttype git ch | fzf
 go install github.com/trknhr/ghosttype@latest
 ```
 
-### 2. Install fzf (optional)
-
-```bash
-brew install fzf
-```
-
----
-
-## 🧬 Zsh Integration (fzf mode)
-
-```zsh
-function ghosttype_predict() {
-  local input="$BUFFER"
-  local suggestion=$(ghosttype "$input" | fzf --prompt="ghosttype> " | head -n1)
-  
-  if [[ -n $suggestion ]]; then
-    BUFFER="$suggestion"
-    CURSOR=${#BUFFER}
-    zle reset-prompt
-  fi
-}
-
-zle -N ghosttype_predict
-bindkey '^P' ghosttype_predict
-```
-
----
-
-## 🖥️ Zsh Integration (TUI mode)
+## 🖥️ Zsh Integration
 
 ```zsh
 # Predict a command using ghosttype + TUI, then replace current shell input with the selection
 function ghosttype_predict() {
-  local result=$(ghosttype tui)
+  local result=$(ghosttype "$BUFFER")
   if [[ -n "$result" ]]; then
     BUFFER="$result"
     CURSOR=${#BUFFER}
@@ -101,8 +67,6 @@ function ghosttype_predict() {
 zle -N ghosttype_predict
 bindkey '^p' ghosttype_predict
 ```
-
----
 
 ## 🧠 Architecture
 
@@ -115,8 +79,6 @@ Ghosttype uses an ensemble of models:
 * `embedding`: LLM-generated vector search powered by `ollama`
 
 All models implement a unified `SuggestModel` interface and are combined via `ensemble.Model`.
-
----
 
 ## 🗂 Project Structure
 
@@ -133,7 +95,6 @@ All models implement a unified `SuggestModel` interface and are combined via `en
 └── go.mod
 ```
 
----
 
 ## 📜 License
 

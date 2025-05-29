@@ -1,80 +1,22 @@
-// cmd/tui.go
-package cmd
+package tui
 
 import (
 	"database/sql"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/spf13/cobra"
-	"github.com/trknhr/ghosttype/internal/logger.go"
+	"github.com/trknhr/ghosttype/internal"
 	"github.com/trknhr/ghosttype/model"
 )
 
-type tuiFlags struct {
-	outFile string
-}
-
-var flags tuiFlags
-
-func init() {
-	TuiCmd.Flags().StringVar(&flags.outFile, "out-file", "", "write selection to file instead of stdout (script‑friendly)")
-
-}
-
-type suggestionItem struct{ text string }
-
-func (i suggestionItem) Title() string       { return i.text }
-func (i suggestionItem) Description() string { return "" }
-func (i suggestionItem) FilterValue() string { return i.text }
-
-var TuiCmd = &cobra.Command{
-	Use:   "tui",
-	Short: "Launch TUI for command suggestions",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		model, err := NewTuiModel(globalDB)
-		if err != nil {
-			return err
-		}
-		tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
-		if err != nil {
-			logger.Error("%v", err)
-		}
-		defer tty.Close()
-
-		p := tea.NewProgram(model, tea.WithAltScreen(),
-			tea.WithInput(tty),
-			tea.WithOutput(tty),
-		)
-		if _, err := p.Run(); err != nil {
-			return fmt.Errorf("failed to run TUI: %w", err)
-		}
-		// fmt.Println(model.SelectedText())
-		if flags.outFile != "" {
-			f, err := os.Create(flags.outFile)
-			if err != nil {
-				return err
-			}
-			fmt.Fprintln(f, model.SelectedText())
-			f.Close()
-		} else {
-			fmt.Println(model.SelectedText())
-		}
-		return nil
-	},
-}
-
-// TUI model
 type tuiModel struct {
 	input     textinput.Model
 	list      list.Model
-	results   []model.Suggestion
 	db        *sql.DB
 	engine    model.SuggestModel
 	lastInput string
@@ -83,6 +25,7 @@ type tuiModel struct {
 	selected  string
 }
 
+// compactDelegate renders items in a single-line compact form.
 type compactDelegate struct{}
 
 func (d compactDelegate) Height() int                               { return 1 }
@@ -102,24 +45,25 @@ func (d compactDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	fmt.Fprint(w, str)
 }
 
-func NewTuiModel(db *sql.DB) (*tuiModel, error) {
+type suggestionItem struct{ text string }
+
+func (i suggestionItem) Title() string       { return i.text }
+func (i suggestionItem) Description() string { return "" }
+func (i suggestionItem) FilterValue() string { return i.text }
+
+func NewTuiModel(db *sql.DB, initialInput string, filterModels string) (*tuiModel, error) {
 	input := textinput.New()
 	input.Placeholder = "Type command prefix..."
+	input.SetValue(initialInput)
 	input.Focus()
 
-	delegate := list.NewDefaultDelegate()
-	delegate.ShowDescription = false
-	delegate.Styles.SelectedTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
-
-	// Expand to terminal width and height dynamically
 	l := list.New([]list.Item{}, &compactDelegate{}, 40, 10)
-
 	l.SetShowPagination(false)
 	l.SetShowHelp(false)
+	l.SetShowTitle(false)
+	l.SetShowStatusBar(false)
 
-	l.Title = "Suggestions"
-
-	engine := GenerateModel(db, "") // 実際は適切なモデルを入れてください
+	engine := internal.GenerateModel(db, filterModels)
 
 	return &tuiModel{
 		input:  input,
@@ -141,24 +85,26 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.list.SetSize(msg.Width, msg.Height-4)
+
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlC:
 			return m, tea.Quit
+
 		case tea.KeyEnter:
 			if item, ok := m.list.SelectedItem().(suggestionItem); ok {
 				m.selected = item.text
 				m.input.SetValue(item.text)
 				return m, tea.Quit
 			}
+
 		case tea.KeyUp, tea.KeyDown:
 			m.input.Blur()
+
 		default:
 			if !m.input.Focused() {
-				// 再度入力状態へ
 				m.input.Focus()
 			}
-
 			m.input, _ = m.input.Update(msg)
 		}
 	}
@@ -189,12 +135,13 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *tuiModel) View() string {
-	s := "Ghosttype TUI\n\n"
+	s := "Ghosttype\n\n"
 	s += m.input.View() + "\n\n"
 	s += m.list.View() + "\n"
-	s += "(q = Quit)"
+	s += "(q = Ctrl+C)"
 	return s
 }
+
 func (m *tuiModel) SelectedText() string {
 	return m.selected
 }

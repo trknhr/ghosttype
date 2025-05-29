@@ -3,130 +3,54 @@ package cmd
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
-	"strings"
-	"unicode/utf8"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
-	"github.com/trknhr/ghosttype/history"
 	"github.com/trknhr/ghosttype/internal"
 	"github.com/trknhr/ghosttype/internal/logger.go"
-	"github.com/trknhr/ghosttype/model"
-	"github.com/trknhr/ghosttype/model/alias"
-	"github.com/trknhr/ghosttype/model/context"
-	"github.com/trknhr/ghosttype/model/embedding"
-	"github.com/trknhr/ghosttype/model/ensemble"
-	"github.com/trknhr/ghosttype/model/freq"
-	"github.com/trknhr/ghosttype/model/markov"
-	"github.com/trknhr/ghosttype/ollama"
+	"github.com/trknhr/ghosttype/tui"
 )
 
-var filterModels string
+func NewRootCmd(db *sql.DB) *cobra.Command {
+	var filterModels string
 
-func init() {
-	rootCmd.Flags().StringVar(&filterModels, "filter-models", "", "[dev] comma-separated model list to use (markov,freq,llm,alias,context)")
-}
-
-var globalDB *sql.DB
-
-func isValidUTF8(s string) bool {
-	return utf8.ValidString(s)
-}
-
-var rootCmd = &cobra.Command{
-	Use:   "ghosttype <prefix>",
-	Short: "Suggest command completions based on shell history",
-	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		prefix := strings.TrimSpace(args[0])
-
-		// Loding history
-		historyPath := os.Getenv("HOME") + "/.zsh_history"
-		historyEntries, err := history.LoadFilteredZshHistory(historyPath)
-		if err != nil {
-			log.Fatalf("failed to load history: %v", err)
-		}
-
-		var cleaned []string
-		for _, entry := range historyEntries {
-			splits := strings.FieldsFunc(entry, func(r rune) bool {
-				return r == ';' || r == '&' || r == '|'
-			})
-			for _, s := range splits {
-				s = strings.TrimSpace(s)
-
-				if s != "" && utf8.ValidString(s) {
-					cleaned = append(cleaned, s)
-				}
+	go internal.SyncAliasesAsync(db)
+	cmd := &cobra.Command{
+		Use:   "ghosttype",
+		Short: "Launch TUI for command suggestions",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			initial := ""
+			if len(args) > 0 {
+				initial = args[0]
 			}
-		}
-
-		ollamaClient := ollama.NewHTTPClient("llama3.2", "nomic-embed-text")
-		enabled := map[string]bool{}
-
-		if filterModels == "" {
-			// Turn on all models
-			enabled["markov"] = true
-			enabled["freq"] = true
-			enabled["alias"] = true
-			enabled["context"] = true
-			enabled["llm"] = true
-			enabled["embedding"] = true
-		} else {
-			for _, name := range strings.Split(filterModels, ",") {
-				enabled[strings.TrimSpace(name)] = true
+			model, err := tui.NewTuiModel(db, initial, filterModels)
+			if err != nil {
+				return err
 			}
-		}
-		var models []model.SuggestModel
+			tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
+			if err != nil {
+				logger.Error("%v", err)
+			}
+			defer tty.Close()
 
-		if enabled["markov"] {
-			m := markov.NewModel()
-			m.Learn(cleaned)
-			models = append(models, m)
-		}
-		if enabled["freq"] {
-			m := freq.NewModel()
-			m.Learn(cleaned)
-			models = append(models, m)
-		}
-		if enabled["alias"] {
-			models = append(models, alias.NewAliasModel(alias.NewSQLAliasStore(globalDB)))
-		}
-		if enabled["context"] {
-			root, _ := os.Getwd()
-			models = append(models, context.NewContextModelFromDir(root))
-		}
-		if enabled["llm"] {
-			// latency of llm prediction is bad. TBD
-			// models = append(models, llm.NewLLMRemoteModel("llama3.2", 2.0))
-		}
+			p := tea.NewProgram(model, tea.WithAltScreen(),
+				tea.WithInput(tty),
+				tea.WithOutput(os.Stderr),
+			)
+			if _, err := p.Run(); err != nil {
+				return fmt.Errorf("failed to run TUI: %w", err)
+			}
+			fmt.Println(model.SelectedText())
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&filterModels, "filter-models", "", "[dev] comma-separated model list to use (markov,freq,llm,alias,context)")
 
-		if enabled["embedding"] {
-			m := embedding.NewModel(embedding.NewEmbeddingStore(globalDB), ollamaClient)
-			m.Learn(cleaned)
-			models = append(models, m)
-		}
-
-		model := ensemble.New(models...)
-
-		// Predict
-		results, err := model.Predict(prefix)
-		if err != nil {
-			logger.Error("some models failed during Predict: %v", err)
-		}
-
-		for _, r := range results {
-			fmt.Println(r.Text)
-		}
-	},
+	return cmd
 }
 
 func Execute(db *sql.DB) error {
-	globalDB = db
-
-	go internal.SyncAliasesAsync(db)
-	rootCmd.AddCommand(TuiCmd)
-
-	return rootCmd.Execute()
+	cmd := NewRootCmd(db)
+	return cmd.Execute()
 }
