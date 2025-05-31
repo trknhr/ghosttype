@@ -49,7 +49,11 @@ $ git ch▍    # Press Ctrl+P (zsh Integration)
 go install github.com/trknhr/ghosttype@latest
 ```
 
+This will install the ghosttype command to your $GOBIN (usually ~/go/bin).
+
 ## 🖥️ Zsh Integration
+
+Add the following to your .zshrc:
 
 ```zsh
 # Predict a command using ghosttype + TUI, then replace current shell input with the selection
@@ -64,6 +68,14 @@ function ghosttype_predict() {
 zle -N ghosttype_predict
 bindkey '^p' ghosttype_predict
 ```
+
+Then reload your shell:
+
+```bash
+source ~/.zshrc
+```
+
+Now press `Ctrl+P` in your terminal to trigger Ghosttype suggestions.
 
 ## 🧠 Enable LLM-Powered Suggestions (via Ollama)
 
