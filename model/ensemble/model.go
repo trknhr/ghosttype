@@ -37,6 +37,7 @@ func (e *Ensemble) Predict(input string) ([]model.Suggestion, error) {
 	var allErr error
 	for _, model := range e.Models {
 		suggestions, err := model.Predict(input)
+
 		if err != nil {
 			allErr = errors.Join(allErr, err)
 		}

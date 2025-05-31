@@ -7,12 +7,14 @@ import (
 	"unicode/utf8"
 
 	"github.com/trknhr/ghosttype/history"
+	"github.com/trknhr/ghosttype/internal/utils"
 	"github.com/trknhr/ghosttype/model"
 	"github.com/trknhr/ghosttype/model/alias"
 	"github.com/trknhr/ghosttype/model/context"
 	"github.com/trknhr/ghosttype/model/embedding"
 	"github.com/trknhr/ghosttype/model/ensemble"
 	"github.com/trknhr/ghosttype/model/freq"
+	"github.com/trknhr/ghosttype/model/llm"
 	"github.com/trknhr/ghosttype/model/markov"
 	"github.com/trknhr/ghosttype/ollama"
 )
@@ -57,12 +59,12 @@ func GenerateModel(db *sql.DB, filterModels string) model.SuggestModel {
 	var models []model.SuggestModel
 
 	if enabled["markov"] {
-		m := markov.NewModel()
+		m := markov.NewMarkovModel()
 		m.Learn(cleaned)
 		models = append(models, m)
 	}
 	if enabled["freq"] {
-		m := freq.NewModel()
+		m := freq.NewFreqModel()
 		m.Learn(cleaned)
 		models = append(models, m)
 	}
@@ -75,12 +77,27 @@ func GenerateModel(db *sql.DB, filterModels string) model.SuggestModel {
 	}
 	if enabled["embedding"] {
 		m := embedding.NewModel(embedding.NewEmbeddingStore(db), ollamaClient)
-		go m.Learn(cleaned)
-		models = append(models, m)
+		// test if the model is working
+		_, err := ollamaClient.Embed("echo")
+		if err != nil {
+			utils.WarnOnce()
+		} else {
+			go m.Learn(cleaned)
+			models = append(models, m)
+		}
+
 	}
 	if enabled["llm"] {
-		// latency of llm prediction is bad. TBD
-		// models = append(models, llm.NewLLMRemoteModel("llama3.2", 2.0))
+		llmModel := llm.NewLLMRemoteModel(ollamaClient)
+
+		// test if the model is working
+		_, err := llmModel.Predict("echo")
+		if err != nil {
+			utils.WarnOnce()
+		} else {
+			models = append(models, llmModel)
+		}
+
 	}
 
 	return ensemble.New(models...)

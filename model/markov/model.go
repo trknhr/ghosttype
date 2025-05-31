@@ -12,7 +12,7 @@ type MarkovModel struct {
 	Transitions map[string]map[string]int
 }
 
-func NewModel() model.SuggestModel {
+func NewMarkovModel() model.SuggestModel {
 	return &MarkovModel{
 		Transitions: make(map[string]map[string]int),
 	}

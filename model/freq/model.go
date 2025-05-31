@@ -11,7 +11,7 @@ type FreqModel struct {
 	Counts map[string]int
 }
 
-func NewModel() model.SuggestModel {
+func NewFreqModel() model.SuggestModel {
 	return &FreqModel{Counts: make(map[string]int)}
 }
 

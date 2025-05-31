@@ -1,30 +1,20 @@
 package llm
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
-	"time"
 
-	"github.com/trknhr/ghosttype/internal/logger.go"
 	"github.com/trknhr/ghosttype/model"
+	"github.com/trknhr/ghosttype/ollama"
 )
 
 type LLMRemoteModel struct {
-	modelName string
-	weight    float64
-	client    *http.Client
+	client ollama.OllamaClient
 }
 
-func NewLLMRemoteModel(modelName string, weight float64) model.SuggestModel {
+func NewLLMRemoteModel(client ollama.OllamaClient) model.SuggestModel {
 	return &LLMRemoteModel{
-		modelName: modelName,
-		weight:    weight,
-		client:    &http.Client{Timeout: 5 * time.Second},
+		client: client,
 	}
 }
 
@@ -34,64 +24,27 @@ type ollamaRequest struct {
 	Stream bool   `json:"stream"`
 }
 
-type ollamaResponse struct {
-	Response string `json:"response"`
-}
-
 func (m *LLMRemoteModel) Predict(input string) ([]model.Suggestion, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	logger.Debug("[llm] llm predict")
+	prompt := fmt.Sprintf(`You are a shell autocomplete engine.
 
-	prompt := fmt.Sprintf(`You are a command-line autocomplete engine.
-Given a partial shell command, return exactly 3 likely completions. 
-Respond with each candidate on its own line. Do not add explanations or examples.
-Respond with only raw shell commands. No markdown, no numbers, no quotes.
-Only output valid commands. Do not invent new ones.
+Your task is to suggest exactly 3 possible shell commands that begin with the given prefix.
+
+- Output exactly 3 candidates
+- One per line
+- No markdown, quotes, or extra formatting
+- No explanations or context
+- If the prefix is empty, return 3 common shell commands
 
 Prefix: %q
-
-Output:
 `, input)
 
-	reqBody, err := json.Marshal(ollamaRequest{
-		Model:  m.modelName,
-		Prompt: prompt,
-		Stream: false,
-	})
+	resp, err := m.client.Generate(prompt)
+
 	if err != nil {
-		logger.Debug("[llm] request marshal failed: %v", err)
 		return nil, err
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", "http://localhost:11434/api/generate", bytes.NewBuffer(reqBody))
-	if err != nil {
-		logger.Debug("[llm] http request creation failed: %v", err)
-		return nil, err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := m.client.Do(httpReq)
-	if err != nil {
-		logger.Debug("[llm] ollama request failed: %v", err)
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		logger.Debug("[llm] read error: %v", err)
-		return nil, err
-	}
-
-	var ollamaResp ollamaResponse
-	if err := json.Unmarshal(body, &ollamaResp); err != nil {
-		logger.Debug("[llm] parse error: %v", err)
-		return nil, err
-	}
-
-	logger.Debug("[llm] response: %v", ollamaResp.Response)
-	lines := strings.Split(ollamaResp.Response, "\n")
+	lines := strings.Split(resp.Response, "\n")
 
 	var suggestions []model.Suggestion
 	for _, line := range lines {
@@ -112,5 +65,5 @@ func (m *LLMRemoteModel) Learn(entries []string) error {
 }
 
 func (m *LLMRemoteModel) Weight() float64 {
-	return m.weight
+	return 0.5
 }

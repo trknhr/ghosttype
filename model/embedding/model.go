@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/trknhr/ghosttype/internal/logger.go"
+	"github.com/trknhr/ghosttype/internal/utils"
 	"github.com/trknhr/ghosttype/model"
 	"github.com/trknhr/ghosttype/ollama"
 )
@@ -22,8 +23,14 @@ func NewModel(store EmbeddingStore, client ollama.OllamaClient) model.SuggestMod
 
 func (m *EmbeddingModel) Learn(entries []string) error {
 	var allErr error
+	inserted := 0
+	const maxInsert = 100
 
 	for _, entry := range entries {
+		if inserted >= maxInsert {
+			break
+		}
+
 		//  skip
 		if m.store.Exists("history", entry) {
 			continue
@@ -31,6 +38,7 @@ func (m *EmbeddingModel) Learn(entries []string) error {
 
 		resp, err := m.client.Embed(entry)
 		if err != nil {
+			utils.WarnOnce()
 			logger.Debug("failed to save embedding: %v", err)
 			allErr = errors.Join(allErr, err)
 			continue
@@ -41,6 +49,8 @@ func (m *EmbeddingModel) Learn(entries []string) error {
 			logger.Debug("failed to save embedding: %v", err)
 			allErr = errors.Join(allErr, err)
 		}
+
+		inserted++
 	}
 	return allErr
 }
