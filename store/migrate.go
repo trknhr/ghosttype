@@ -18,6 +18,7 @@ func Migrate(db *sql.DB) error {
 			session_id  TEXT DEFAULT '',
 			created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		);`,
+		"CREATE INDEX IF NOT EXISTS idx_history_command_prefix ON history(command);",
 		`CREATE VIRTUAL TABLE IF NOT EXISTS history_fts USING fts5(
 			command, content='history', content_rowid='id'
 		);`,

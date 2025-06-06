@@ -1,0 +1,10 @@
+{"input": "git pu", "expected": "git push"}
+{"input": "npx ", "expected": "npx repomix"}
+{"input": "docker co", "expected": "docker compose up"}
+{"input": "git st", "expected": "git status"}
+{"input": "npm i", "expected": "npm install"}
+{"input": "yarn a", "expected": "yarn add"}
+{"input": "git br", "expected": "git branch"}
+{"input": "docker ps", "expected": "docker ps -a"}
+{"input": "npm run ", "expected": "npm run dev"}
+{"input": "git ch", "expected": "git checkout"}

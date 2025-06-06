@@ -21,6 +21,7 @@ import (
 	"github.com/trknhr/ghosttype/model/freq"
 	"github.com/trknhr/ghosttype/model/llm"
 	"github.com/trknhr/ghosttype/model/markov"
+	"github.com/trknhr/ghosttype/model/prefix"
 	"github.com/trknhr/ghosttype/ollama"
 )
 
@@ -53,6 +54,7 @@ func GenerateModel(db *sql.DB, filterModels string) model.SuggestModel {
 	if filterModels == "" {
 		enabled["markov"] = true
 		enabled["freq"] = true
+		enabled["prefix"] = true
 		enabled["alias"] = true
 		enabled["context"] = true
 		enabled["llm"] = true
@@ -72,10 +74,10 @@ func GenerateModel(db *sql.DB, filterModels string) model.SuggestModel {
 	}
 	if enabled["freq"] {
 		m := freq.NewFreqModel(db)
-		err := m.Learn(cleaned)
-		if err != nil {
-			logger.Error("failed to learn frequency model: %v", err)
-		}
+		models = append(models, m)
+	}
+	if enabled["prefix"] {
+		m := prefix.NewPrefixModel(db)
 		models = append(models, m)
 	}
 	if enabled["alias"] {
@@ -151,6 +153,7 @@ var workerOnce sync.Once
 
 func launchWorker() {
 	workerOnce.Do(func() {
+		return
 		go func() {
 			logger.Debug("launching learn-history worker")
 			cmd := exec.Command(os.Args[0], "load-history")

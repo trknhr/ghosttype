@@ -1,12 +1,8 @@
-// cmd/learn_history.go
 package cmd
 
 import (
 	"context"
-	"database/sql"
-	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -65,22 +61,6 @@ func RunHistoryWorker(ctx context.Context) error {
 		}
 	}
 
-	db := GetDB() // 内部で *sql.DB を取得
+	db := internal.GetDB() // 内部で *sql.DB を取得
 	return internal.SaveHistory(db, cleaned)
-}
-
-func GetDB() *sql.DB {
-	cacheDir, err := os.UserCacheDir()
-	if err != nil {
-		log.Fatalf("failed to get user cache dir: %v", err)
-	}
-	dbPath := filepath.Join(cacheDir, "ghosttype", "ghosttype.db")
-
-	_ = os.MkdirAll(filepath.Dir(dbPath), 0755)
-
-	db, err := sql.Open("libsql", dbPath)
-	if err != nil {
-		log.Fatalf("failed to open database: %v", err)
-	}
-	return db
 }

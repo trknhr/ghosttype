@@ -53,6 +53,7 @@ func NewRootCmd(db *sql.DB) *cobra.Command {
 func Execute(db *sql.DB) error {
 	cmd := NewRootCmd(db)
 	cmd.AddCommand(LearnHistoryCmd)
+	cmd.AddCommand(NewEvalCmd(db))
 
 	return cmd.Execute()
 }
