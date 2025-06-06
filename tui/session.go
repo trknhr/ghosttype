@@ -77,6 +77,19 @@ func (m *tuiModel) Init() tea.Cmd {
 	return textinput.Blink
 }
 
+type suggestionsMsg struct {
+	prefix      string
+	suggestions []model.Suggestion
+	err         error
+}
+
+func fetchSuggestionsCmd(engine model.SuggestModel, prefix string) tea.Cmd {
+	return func() tea.Msg {
+		suggestions, err := engine.Predict(prefix)
+		return suggestionsMsg{prefix, suggestions, err}
+	}
+}
+
 func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
@@ -107,6 +120,21 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.input, _ = m.input.Update(msg)
 		}
+	case suggestionsMsg:
+		if msg.prefix != m.lastInput {
+			// discard outdated suggestions
+			return m, nil
+		}
+		if msg.err != nil {
+			m.list.SetItems([]list.Item{suggestionItem{text: "Error: " + msg.err.Error()}})
+		} else {
+			items := make([]list.Item, 0, len(msg.suggestions))
+			for _, s := range msg.suggestions {
+				items = append(items, suggestionItem{text: s.Text})
+			}
+			m.list.SetItems(items)
+			m.list.ResetSelected()
+		}
 	}
 
 	m.list, _ = m.list.Update(msg)
@@ -115,17 +143,7 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if prefix != m.lastInput {
 		m.lastInput = prefix
 		if prefix != "" {
-			suggestions, err := m.engine.Predict(prefix)
-			if err != nil {
-				m.list.SetItems([]list.Item{suggestionItem{text: "Error: " + err.Error()}})
-			} else {
-				items := make([]list.Item, 0, len(suggestions))
-				for _, s := range suggestions {
-					items = append(items, suggestionItem{text: s.Text})
-				}
-				m.list.SetItems(items)
-				m.list.ResetSelected()
-			}
+			cmds = append(cmds, fetchSuggestionsCmd(m.engine, prefix))
 		} else {
 			m.list.SetItems([]list.Item{})
 		}

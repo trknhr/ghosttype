@@ -9,6 +9,28 @@ import (
 
 func Migrate(db *sql.DB) error {
 	schema := []string{
+		`CREATE TABLE IF NOT EXISTS history (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			command     TEXT NOT NULL,
+			hash        TEXT NOT NULL UNIQUE,         
+			count       INTEGER NOT NULL DEFAULT 1,
+			source      TEXT DEFAULT 'shell',
+			session_id  TEXT DEFAULT '',
+			created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);`,
+		`CREATE VIRTUAL TABLE IF NOT EXISTS history_fts USING fts5(
+			command, content='history', content_rowid='id'
+		);`,
+		`CREATE TRIGGER IF NOT EXISTS history_ai AFTER INSERT ON history BEGIN
+			INSERT INTO history_fts(rowid, command) VALUES (new.id, new.command);
+		END;`,
+		`CREATE TRIGGER IF NOT EXISTS history_ad AFTER DELETE ON history BEGIN
+			INSERT INTO history_fts(history_fts, rowid, command) VALUES ('delete', old.id, old.command);
+		END;`,
+		`CREATE TRIGGER IF NOT EXISTS history_au AFTER UPDATE ON history BEGIN
+			INSERT INTO history_fts(history_fts, rowid, command) VALUES ('delete', old.id, old.command);
+			INSERT INTO history_fts(rowid, command) VALUES (new.id, new.command);
+		END;`,
 		// aliases: ALIAS commands on zshrc
 		`CREATE TABLE IF NOT EXISTS aliases (
 			name TEXT PRIMARY KEY,

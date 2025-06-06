@@ -1,11 +1,17 @@
 package ensemble
 
 import (
+	"context"
 	"errors"
 	"sort"
+	"sync"
+	"time"
 
 	"github.com/trknhr/ghosttype/model"
+	"golang.org/x/sync/errgroup"
 )
+
+const SuggestionTimeout = 2 * time.Second
 
 type Ensemble struct {
 	Models []model.SuggestModel
@@ -32,22 +38,49 @@ func (e *Ensemble) Predict(input string) ([]model.Suggestion, error) {
 		Text  string
 		Score float64
 	}
+
 	scoreMap := make(map[string]float64)
+	var mu sync.Mutex
 
-	var allErr error
-	for _, model := range e.Models {
-		suggestions, err := model.Predict(input)
+	// time out context
+	ctx, cancel := context.WithTimeout(context.Background(), SuggestionTimeout)
+	defer cancel()
 
-		if err != nil {
-			allErr = errors.Join(allErr, err)
-		}
-		weight := model.Weight()
-		for _, s := range suggestions {
-			scoreMap[s.Text] += s.Score * weight
-		}
+	g, ctx := errgroup.WithContext(ctx)
+
+	for _, m := range e.Models {
+		model := m
+
+		g.Go(func() error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				suggestions, err := model.Predict(input)
+				if err != nil {
+					return err
+				}
+
+				weight := model.Weight()
+
+				mu.Lock()
+				for _, s := range suggestions {
+					scoreMap[s.Text] += s.Score * weight
+				}
+				mu.Unlock()
+
+				return nil
+			}
+		})
 	}
 
-	var rankedList []ranked
+	err := g.Wait()
+
+	if err != nil {
+		return nil, err
+	}
+
+	rankedList := make([]ranked, 0, len(scoreMap))
 	for text, score := range scoreMap {
 		rankedList = append(rankedList, ranked{text, score})
 	}
@@ -57,9 +90,13 @@ func (e *Ensemble) Predict(input string) ([]model.Suggestion, error) {
 
 	results := make([]model.Suggestion, len(rankedList))
 	for i := range rankedList {
-		results[i].Text = rankedList[i].Text
+		results[i] = model.Suggestion{
+			Text:  rankedList[i].Text,
+			Score: rankedList[i].Score,
+		}
 	}
-	return results, allErr
+
+	return results, nil
 }
 
 func (m *Ensemble) Weight() float64 {

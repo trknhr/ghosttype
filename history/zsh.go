@@ -2,6 +2,9 @@ package history
 
 import (
 	"bufio"
+	"bytes"
+	"fmt"
+	"io"
 	"os"
 	"strings"
 )
@@ -121,4 +124,80 @@ func isValidCommand(line string) bool {
 
 	// Passed all heuristics
 	return true
+}
+
+func LoadZshHistoryTail(path string, maxLines int) ([]string, error) {
+	const readBlockSize = 4096
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	fi, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		fileSize = fi.Size()
+		buf      []byte
+		lines    []string
+	)
+
+	var offset int64 = fileSize
+	var leftover []byte
+
+	for offset > 0 && len(lines) < maxLines {
+		// Move back by readBlockSize or to the beginning
+		blockSize := int64(readBlockSize)
+		if offset < blockSize {
+			blockSize = offset
+		}
+		offset -= blockSize
+
+		// Seek and read
+		block := make([]byte, blockSize)
+		_, err := file.ReadAt(block, offset)
+		if err != nil && err != io.EOF {
+			return nil, fmt.Errorf("read error: %w", err)
+		}
+
+		buf = append(block, leftover...)
+		scanner := bufio.NewScanner(bytes.NewReader(buf))
+		var blockLines []string
+		for scanner.Scan() {
+			blockLines = append(blockLines, scanner.Text())
+		}
+		leftover = []byte(blockLines[0])
+		for i := len(blockLines) - 1; i > 0; i-- {
+			line := cleanZshLine(blockLines[i])
+			if line != "" {
+				lines = append(lines, line)
+			}
+			if len(lines) >= maxLines {
+				break
+			}
+		}
+	}
+
+	// Reverse to restore chronological order
+	for i, j := 0, len(lines)-1; i < j; i, j = i+1, j-1 {
+		lines[i], lines[j] = lines[j], lines[i]
+	}
+
+	return lines, nil
+}
+
+func cleanZshLine(line string) string {
+	line = string(bytes.TrimSpace([]byte(line)))
+	if strings.HasPrefix(line, ": ") {
+		parts := strings.SplitN(line, ";", 2)
+		if len(parts) == 2 {
+			return string(strings.TrimSpace(parts[1]))
+		}
+		return ""
+	}
+	return string(line)
 }

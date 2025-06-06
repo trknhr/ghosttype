@@ -3,10 +3,15 @@ package internal
 import (
 	"database/sql"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
+	"sync"
+	"syscall"
 	"unicode/utf8"
 
 	"github.com/trknhr/ghosttype/history"
+	"github.com/trknhr/ghosttype/internal/logger.go"
 	"github.com/trknhr/ghosttype/internal/utils"
 	"github.com/trknhr/ghosttype/model"
 	"github.com/trknhr/ghosttype/model/alias"
@@ -21,7 +26,7 @@ import (
 
 func GenerateModel(db *sql.DB, filterModels string) model.SuggestModel {
 	historyPath := os.Getenv("HOME") + "/.zsh_history"
-	historyEntries, err := history.LoadFilteredZshHistory(historyPath)
+	historyEntries, err := history.LoadZshHistoryTail(historyPath, 100)
 	if err != nil {
 		// return nil, fmt.Errorf("failed to load history: %w", err)
 		return nil
@@ -39,6 +44,8 @@ func GenerateModel(db *sql.DB, filterModels string) model.SuggestModel {
 			}
 		}
 	}
+
+	launchWorker()
 
 	ollamaClient := ollama.NewHTTPClient("llama3.2", "nomic-embed-text")
 	enabled := map[string]bool{}
@@ -64,8 +71,11 @@ func GenerateModel(db *sql.DB, filterModels string) model.SuggestModel {
 		models = append(models, m)
 	}
 	if enabled["freq"] {
-		m := freq.NewFreqModel()
-		m.Learn(cleaned)
+		m := freq.NewFreqModel(db)
+		err := m.Learn(cleaned)
+		if err != nil {
+			logger.Error("failed to learn frequency model: %v", err)
+		}
 		models = append(models, m)
 	}
 	if enabled["alias"] {
@@ -101,4 +111,75 @@ func GenerateModel(db *sql.DB, filterModels string) model.SuggestModel {
 	}
 
 	return ensemble.New(models...)
+}
+
+func SaveHistory(db *sql.DB, entries []string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	stmt, err := tx.Prepare(`
+		INSERT INTO history(command, hash, count)
+		VALUES (?, ?, 1)
+		ON CONFLICT(hash) DO UPDATE SET count = count + 1
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, cmd := range entries {
+		cmd = strings.TrimSpace(cmd)
+		if cmd == "" {
+			continue
+		}
+		hash := utils.Hash(cmd)
+		if _, err := stmt.Exec(cmd, hash); err != nil {
+			logger.Error("failed to insert command: %s, %v", cmd, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		logger.Error("failed to commit history tx: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+var workerOnce sync.Once
+
+func launchWorker() {
+	workerOnce.Do(func() {
+		go func() {
+			logger.Debug("launching learn-history worker")
+			cmd := exec.Command(os.Args[0], "load-history")
+
+			// 共通設定
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Stdin = nil
+
+			if runtime.GOOS == "windows" {
+				// Windows: detached mode を有効に
+				// TBD
+				// cmd.SysProcAttr = &syscall.SysProcAttr{
+				// 	CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP |
+				// 		syscall.CREATE_NO_WINDOW,
+				// }
+			} else {
+				// macOS/Linux: セッションとプロセスグループを切り離す
+				cmd.SysProcAttr = &syscall.SysProcAttr{
+					Setsid:  true,
+					Setpgid: true,
+				}
+			}
+
+			if err := cmd.Start(); err != nil {
+				logger.Error("failed to launch learn-history: %v", err)
+			}
+
+		}()
+	})
+
 }
