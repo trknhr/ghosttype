@@ -1,0 +1,17 @@
+{
+  "commands": null,
+  "stats": {
+    "repos_processed": 0,
+    "files_processed": 0,
+    "commands_found": 0,
+    "error_count": 6,
+    "processing_time": 152275081625,
+    "language_stats": {},
+    "file_type_stats": {}
+  },
+  "meta": {
+    "generated_at": "2025-06-09T23:20:50+09:00",
+    "tool": "ghosttype-github-extractor",
+    "version": "1.0"
+  }
+}

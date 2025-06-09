@@ -7,6 +7,7 @@ import (
 
 	"github.com/trknhr/ghosttype/internal/logger.go"
 	"github.com/trknhr/ghosttype/model"
+
 	_ "github.com/tursodatabase/go-libsql"
 )
 

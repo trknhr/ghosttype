@@ -24,13 +24,13 @@ func (m *PrefixModel) Learn(entries []string) error {
 }
 
 func (m *PrefixModel) Predict(input string) ([]model.Suggestion, error) {
-	query := input + "%" // 例: "git%"
+	query := input + "%"
 
 	rows, err := m.db.Query(`
-		SELECT command, COUNT(*) as cnt
+		SELECT command, count
 		FROM  history
 		WHERE command LIKE ?
-		ORDER BY cnt DESC
+		ORDER BY count DESC
 		LIMIT 20;
 	`, query)
 	if err != nil {
@@ -48,7 +48,7 @@ func (m *PrefixModel) Predict(input string) ([]model.Suggestion, error) {
 		results = append(results, model.Suggestion{
 			Text:   cmd,
 			Score:  float64(count),
-			Source: "freq",
+			Source: "prefix",
 		})
 	}
 	return results, nil

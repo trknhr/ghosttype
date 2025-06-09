@@ -1,13 +1,11 @@
 package internal
 
 import (
+	"context"
 	"database/sql"
 	"os"
-	"os/exec"
-	"runtime"
 	"strings"
-	"sync"
-	"syscall"
+	"time"
 	"unicode/utf8"
 
 	"github.com/trknhr/ghosttype/history"
@@ -15,7 +13,8 @@ import (
 	"github.com/trknhr/ghosttype/internal/utils"
 	"github.com/trknhr/ghosttype/model"
 	"github.com/trknhr/ghosttype/model/alias"
-	"github.com/trknhr/ghosttype/model/context"
+	"github.com/trknhr/ghosttype/model/setting"
+
 	"github.com/trknhr/ghosttype/model/embedding"
 	"github.com/trknhr/ghosttype/model/ensemble"
 	"github.com/trknhr/ghosttype/model/freq"
@@ -36,7 +35,7 @@ func GenerateModel(db *sql.DB, filterModels string) model.SuggestModel {
 	var cleaned []string
 	for _, entry := range historyEntries {
 		splits := strings.FieldsFunc(entry, func(r rune) bool {
-			return r == ';' || r == '&' || r == '|'
+			return r == ';' || r == '|'
 		})
 		for _, s := range splits {
 			s = strings.TrimSpace(s)
@@ -46,7 +45,7 @@ func GenerateModel(db *sql.DB, filterModels string) model.SuggestModel {
 		}
 	}
 
-	launchWorker()
+	// launchWorker(db)
 
 	ollamaClient := ollama.NewHTTPClient("llama3.2", "nomic-embed-text")
 	enabled := map[string]bool{}
@@ -85,7 +84,7 @@ func GenerateModel(db *sql.DB, filterModels string) model.SuggestModel {
 	}
 	if enabled["context"] {
 		root, _ := os.Getwd()
-		models = append(models, context.NewContextModelFromDir(root))
+		models = append(models, setting.NewContextModelFromDir(root))
 	}
 	if enabled["embedding"] {
 		m := embedding.NewModel(embedding.NewEmbeddingStore(db), ollamaClient)
@@ -121,6 +120,8 @@ func SaveHistory(db *sql.DB, entries []string) error {
 		return err
 	}
 
+	defer tx.Rollback()
+
 	stmt, err := tx.Prepare(`
 		INSERT INTO history(command, hash, count)
 		VALUES (?, ?, 1)
@@ -149,40 +150,32 @@ func SaveHistory(db *sql.DB, entries []string) error {
 	return nil
 }
 
-var workerOnce sync.Once
+func launchWorker(db *sql.DB) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		defer cancel()
 
-func launchWorker() {
-	workerOnce.Do(func() {
-		return
-		go func() {
-			logger.Debug("launching learn-history worker")
-			cmd := exec.Command(os.Args[0], "load-history")
+		if err := RunHistoryWorker(ctx, db); err != nil {
+			logger.Error("background learning failed: %v", err)
+		}
+	}()
+}
 
-			// 共通設定
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			cmd.Stdin = nil
+func RunHistoryWorker(ctx context.Context, db *sql.DB) error {
+	historyPath := os.Getenv("HOME") + "/.zsh_history"
+	historyEntries, err := history.LoadZshHistoryCommands(historyPath)
+	logger.Debug("loaded %d history entries from %s", len(historyEntries), historyPath)
+	if err != nil {
+		return err
+	}
 
-			if runtime.GOOS == "windows" {
-				// Windows: detached mode を有効に
-				// TBD
-				// cmd.SysProcAttr = &syscall.SysProcAttr{
-				// 	CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP |
-				// 		syscall.CREATE_NO_WINDOW,
-				// }
-			} else {
-				// macOS/Linux: セッションとプロセスグループを切り離す
-				cmd.SysProcAttr = &syscall.SysProcAttr{
-					Setsid:  true,
-					Setpgid: true,
-				}
-			}
+	var cleaned []string
+	for _, entry := range historyEntries {
+		s := strings.TrimSpace(entry)
+		if s != "" && utf8.ValidString(s) {
+			cleaned = append(cleaned, s)
+		}
+	}
 
-			if err := cmd.Start(); err != nil {
-				logger.Error("failed to launch learn-history: %v", err)
-			}
-
-		}()
-	})
-
+	return SaveHistory(db, cleaned)
 }

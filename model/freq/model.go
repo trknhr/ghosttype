@@ -1,9 +1,7 @@
 package freq
 
 import (
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 
 	"github.com/trknhr/ghosttype/model"
 
@@ -21,23 +19,17 @@ func NewFreqModel(db *sql.DB) model.SuggestModel {
 	return &FreqModel{Counts: make(map[string]int), db: db, Table: "history"}
 }
 
-func hashCommand(cmd string) string {
-	sum := sha256.Sum256([]byte(cmd))
-	return hex.EncodeToString(sum[:])
-}
-
 func (m *FreqModel) Learn(entries []string) error {
 	return nil
 }
 
 func (m *FreqModel) Predict(input string) ([]model.Suggestion, error) {
 	rows, err := m.db.Query(`
-		SELECT h.command, COUNT(*) as cnt
+		SELECT h.command, count
 		FROM history_fts f
 		JOIN history h ON f.rowid = h.id
 		WHERE f.command MATCH ? || '*'
-		GROUP BY h.command
-		ORDER BY cnt DESC
+		ORDER BY h.count DESC
 		LIMIT 20;
 	`, input)
 	if err != nil {

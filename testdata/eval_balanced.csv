@@ -1,0 +1,644 @@
+input,expected,category,source
+mc,make clean,other,github_commands
+gtsau,git status,git,popular_commands
+gst,git status,git,fuzzy_patterns
+gs,git st,git,popular_commands
+go ru,go run main.go,go,user_history
+nmsat,npm start,npm,fuzzy_patterns
+pnpm de,pnpm dev,other,user_history
+mak,make clean,other,github_commands
+mte,make test,other,user_history
+cargo ru,cargo run,other,github_commands
+mak,make install,other,user_history
+do,docker,docker,user_history
+gpor,git pull origin,git,fuzzy_patterns
+mte,make test,other,github_commands
+l-,ls -al,filesystem,popular_commands
+pnpm ru,pnpm run dev:all,other,user_history
+r-r,rm -rf,filesystem,fuzzy_patterns
+gi,git pull,git,user_history
+gp,git push,git,user_history
+ni--,npm install --save,npm,popular_commands
+n-,node -v,other,user_history
+gc-,git commit -am,git,popular_commands
+nrb,npm run build,npm,fuzzy_patterns
+ma,make compare-tools,other,user_history
+gmti,go mod tidy,go,fuzzy_patterns
+gpo,git pull origin,git,fuzzy_patterns
+l l,ls -la,filesystem,fuzzy_patterns
+nmi,npm i,npm,popular_commands
+gbu,gradle build,other,github_commands
+c..,cd ../,filesystem,user_history
+nmrnbid,npm run build,npm,fuzzy_patterns
+nrdco,npm run dev commit-msg,npm,user_history
+aws ss,aws sso login --profile nulab-library,other,user_history
+make de,"make dev dev ARGS=""--filter-models=embedding"" ARGS2='""git ch""'",other,user_history
+docker sotp,docker stop,docker,fuzzy_patterns
+yst,yarn start,yarn,github_commands
+n nud,npm run build,npm,fuzzy_patterns
+l a,ls -al,filesystem,popular_commands
+cg,cgpt,other,user_history
+np,npm install,npm,popular_commands
+dce otie s,docker container ls,docker,popular_commands
+dst,docker stop,docker,fuzzy_patterns
+npm,npm run dev,npm,user_history
+make tes,make test,other,github_commands
+n a,npm start,npm,fuzzy_patterns
+nmrnsat,npm run start,npm,user_history
+prde,pnpm run dev:all,other,user_history
+m-p,mkdir -p,filesystem,fuzzy_patterns
+mddAAch,"make dev dev ARGS=""--filter-models=embedding"" ARGS2='""git ch""'",other,user_history
+pnpm bui,pnpm build,other,user_history
+l~,less ~/Library/Caches/ghosttype/ghosttype.log,other,user_history
+ls ,ls -al,filesystem,popular_commands
+pte,pnpm test:e2e,other,user_history
+dk o,docker stop,docker,fuzzy_patterns
+ni,npm i,npm,user_history
+nxrpmx,npx repomix,other,user_history
+npm ru,npm run dev commit-msg,npm,user_history
+nrli,npm run lint,npm,user_history
+gtpl,git pull,git,user_history
+ls ,ls -l,filesystem,popular_commands
+r r,rm -rf,filesystem,fuzzy_patterns
+npm tes,npm test,npm,fuzzy_patterns
+git pus,git push,git,user_history
+kubectl a,kubectl apply -f,other,fuzzy_patterns
+c.,code .,other,user_history
+mk et,make test,other,github_commands
+npm intsall,npm install,npm,fuzzy_patterns
+dp-a,docker ps -a,docker,popular_commands
+kelpyf,kubectl apply -f,other,fuzzy_patterns
+kubectl g,kubectl get pods,other,fuzzy_patterns
+np,npm run start,npm,user_history
+rm -,rm -rf,filesystem,fuzzy_patterns
+gal et,gradle test,other,github_commands
+pde,pnpm dev,other,user_history
+go ,go clean && make,go,user_history
+g u ang u\,go run main.go tui\,go,user_history
+kubectl app,kubectl apply -f,other,fuzzy_patterns
+dps,docker ps,docker,fuzzy_patterns
+gtpl rgn,git pull origin,git,fuzzy_patterns
+nd /itcagtdvuisj s -rst=xli a,node ./dist/chatgpt-dev-utils.js ask --presets=explain aaa,other,user_history
+go ,go run main.go,go,user_history
+mk opr-ol,make compare-tools,other,user_history
+nt-.-.-.,npx tailwindcss -i ./src/index.css -o ./dist/test.css --config ./tailwind.config.js\,other,user_history
+make tes,make test,other,user_history
+kbclgtpd,kubectl get pods,other,fuzzy_patterns
+gi,git st,git,popular_commands
+cgp,cgpt,other,user_history
+yr ul,yarn build,yarn,github_commands
+gradle ru,gradle run,other,github_commands
+cr,cargo run,other,github_commands
+ma,make,other,user_history
+pi,pip install,python,fuzzy_patterns
+ni,npm i,npm,popular_commands
+dock,docker,docker,user_history
+gc&m,go clean && make,go,user_history
+nrd,npm run dev,npm,user_history
+cg,cgpt,other,user_history
+yr tr,yarn start,yarn,github_commands
+node ./dist/chatgpt,node ./dist/chatgpt-dev-utils.js ask --presets=explain aaa,other,user_history
+ca,cargo build,other,github_commands
+GHO,GHOSTTYPE_LOG_LEVEL=debug go run main.go,other,user_history
+pnp,pnpm test:e2e,other,user_history
+mvn cle,mvn clean install,other,github_commands
+git pus,git push origin,git,fuzzy_patterns
+docker sto,docker stop,docker,fuzzy_patterns
+m-,mkdir -p,filesystem,fuzzy_patterns
+mk ul,make build,other,user_history
+l-a,ls -al,filesystem,popular_commands
+np,npm run build,npm,user_history
+dce s-,docker ps -a,docker,popular_commands
+np,npm install --save,npm,popular_commands
+pn,pnpm run dev:all,other,user_history
+npx repo,npx repomix,other,user_history
+cd .,cd ..,filesystem,fuzzy_patterns
+db,docker build,docker,fuzzy_patterns
+pp u e:l,pnpm run dev:all,other,user_history
+git,gitmsg,other,user_history
+gst,git st,git,popular_commands
+git,gitmsg,other,user_history
+np,"npm run dev ask ""aaa""",npm,user_history
+cd ..,cd ../,filesystem,user_history
+ys,yarn start,yarn,github_commands
+pnpm test:,pnpm test:e2e,other,user_history
+l l,ls -l,filesystem,user_history
+docker p,docker ps,docker,fuzzy_patterns
+crots,cargo test,other,github_commands
+go mod itdy,go mod tidy,go,fuzzy_patterns
+git c,git commit -m,git,fuzzy_patterns
+gra,gradle test,other,github_commands
+mvn,mvn clean install,other,github_commands
+ns,npm start,npm,fuzzy_patterns
+cargo bui,cargo build,other,github_commands
+c..,cd ..,filesystem,fuzzy_patterns
+c.,code .,other,user_history
+g as,git status,git,fuzzy_patterns
+gtcmi m,git commit -m,git,fuzzy_patterns
+pw,pwd,other,user_history
+pp etee,pnpm test:e2e,other,user_history
+kbclapy-,kubectl apply -f,other,fuzzy_patterns
+NO,NODE_OPTIONS='--loader ts-node/esm' npx ts-node --require tsconfig-paths/register test.ts\,other,user_history
+ls,ls -la,filesystem,popular_commands
+gc-,git commit --amend,git,popular_commands
+grmn,go run main.go notify,go,user_history
+cod,code .,other,user_history
+pnp,pnpm lint:fix,other,user_history
+pipi nstall,pip install,python,fuzzy_patterns
+ma,make build,other,user_history
+gradle tes,gradle test,other,github_commands
+npm,npm i,npm,user_history
+cd,cd ../,filesystem,user_history
+kelere,kubectl describe,other,fuzzy_patterns
+mt,make test,other,user_history
+mak,"make dev dev ARGS=""--filter-models=embedding"" ARGS2='""git""'",other,user_history
+nmrnln,npm run lint,npm,user_history
+nmts,npm test,npm,user_history
+pp e,pnpm dev,other,user_history
+go ru,go run main.go tui\,go,user_history
+l-,ls -l,filesystem,user_history
+cp,cgpt,other,user_history
+ma,make\,other,user_history
+dce tp,docker stop,docker,fuzzy_patterns
+ls,ls -l,filesystem,popular_commands
+nrs,npm run start,npm,user_history
+go mo,go mod tidy,go,user_history
+nte,npm test,npm,fuzzy_patterns
+pli,pnpm lint:fix,other,user_history
+nmrndv,npm run dev,npm,user_history
+nr,npx repomix,other,user_history
+gtcmi -mn,git commit --amend,git,popular_commands
+kubectl ge,kubectl get pods,other,fuzzy_patterns
+mk ntl,make install,other,user_history
+ls,ls -l,filesystem,user_history
+git comm,git commit -m,git,fuzzy_patterns
+dk n,docker run,docker,fuzzy_patterns
+cch,cargo check,other,github_commands
+tg,tig,other,user_history
+ls,ls -al,filesystem,popular_commands
+dp,docker ps,docker,popular_commands
+mi,make install,other,user_history
+ls -l,ls -la,filesystem,popular_commands
+gb,go build,go,fuzzy_patterns
+docker s,docker stop,docker,fuzzy_patterns
+mvn pack,mvn package,other,github_commands
+mt,make test,other,github_commands
+git stat,git status,git,popular_commands
+kd,kubectl describe,other,fuzzy_patterns
+cru,cargo run,other,github_commands
+npm ru,npm run test,npm,user_history
+grma,go run main.go,go,user_history
+gtcmi m,git commit -m,git,popular_commands
+nmisal,npm install,npm,popular_commands
+mak,make\,other,user_history
+gmt,go mod tidy,go,user_history
+l~/,less ~/Library/Caches/ghosttype/ghosttype.log,other,user_history
+gtps,git push,git,user_history
+g la &mk,go clean && make,go,user_history
+yarn inst,yarn install,yarn,github_commands
+min,make install,other,user_history
+do,docker,docker,user_history
+grm,go run main.go,go,user_history
+c.,cd ../,filesystem,user_history
+gal u,gradle run,other,github_commands
+no,node -v,other,user_history
+ti,tig,other,user_history
+mkdir- p,mkdir -p,filesystem,fuzzy_patterns
+pp ul,pnpm build,other,user_history
+yr ntl,yarn install,yarn,github_commands
+aws,aws sso login --profile nulab-library,other,user_history
+cte,cargo test,other,github_commands
+gr,gradle run,other,github_commands
+go ,go run main.go serve\,go,user_history
+l-,ls -l,filesystem,popular_commands
+l l,ls -la,filesystem,popular_commands
+dcls,docker container ls,docker,popular_commands
+g u ang ev,go run main.go serve,go,user_history
+ma,make test,other,user_history
+sq,sqlite3 /Users/teruokunihiro/Library/Caches/ghosttype/ghosttype.db,other,user_history
+gc--,git commit --amend,git,popular_commands
+docker biuld,docker build,docker,fuzzy_patterns
+make compare,make compare-tools,other,user_history
+g u ang,go run main.go,go,user_history
+gc-,git commit -m,git,popular_commands
+dp,docker ps,docker,fuzzy_patterns
+git,git commit --amend,git,popular_commands
+ca,cargo check,other,github_commands
+git p,git push origin,git,fuzzy_patterns
+docker r,docker run,docker,fuzzy_patterns
+mco,make compare-tools,other,user_history
+pd,pnpm dev,other,user_history
+cd ,code .,other,user_history
+doc,docker,docker,user_history
+pt,pnpm test:e2e,other,user_history
+c.,cd ..,filesystem,fuzzy_patterns
+pip i,pip install,python,fuzzy_patterns
+go ,go mod tidy,go,user_history
+npm ru,npm run build,npm,fuzzy_patterns
+np,npm i,npm,popular_commands
+vim ~/.zs,vim ~/.zshrc,other,user_history
+gi,git commit -m,git,popular_commands
+crocek,cargo check,other,github_commands
+ni,npm i,npm,user_history
+mk et,make test,other,user_history
+le,less ~/Library/Caches/ghosttype/ghosttype.log,other,user_history
+mbu,make build,other,github_commands
+go ubild,go build,go,fuzzy_patterns
+yin,yarn install,yarn,github_commands
+ppisal,pip install,python,fuzzy_patterns
+gmt,go mod tidy,go,fuzzy_patterns
+pnpm lint:,pnpm lint:fix,other,user_history
+g o iy,go mod tidy,go,user_history
+GHOSTTYPE_LOG_LEVEL=debug go,GHOSTTYPE_LOG_LEVEL=debug go run main.go,other,user_history
+dcoker run,docker run,docker,fuzzy_patterns
+l-,ls -la,filesystem,fuzzy_patterns
+kuebctl get pods,kubectl get pods,other,fuzzy_patterns
+go,go run main.go notify,go,user_history
+npm t,npm test,npm,fuzzy_patterns
+nmisal,npm install,npm,fuzzy_patterns
+ls ,ls -la,filesystem,popular_commands
+gtps rgn,git push origin,git,fuzzy_patterns
+gtcmi a,git commit -am,git,popular_commands
+vm~.sr,vim ~/.zshrc,other,user_history
+ya,yarn start,yarn,github_commands
+yar,yarn build,yarn,github_commands
+npm inst,npm install,npm,fuzzy_patterns
+mnpcae,mvn package,other,github_commands
+mak,make test,other,github_commands
+cgp,cgpt,other,user_history
+"mk e e RS""-itrmdl=medn""AG2'gtc""","make dev dev ARGS=""--filter-models=embedding"" ARGS2='""git ch""'",other,user_history
+grms,go run main.go serve\,go,user_history
+n-v,node -v,other,user_history
+nd v,node -v,other,user_history
+go ,go run main.go notify,go,user_history
+do,docker ps,docker,popular_commands
+aw,aws sso login --profile nulab-library,other,user_history
+mddAAR,"make dev dev ARGS=""--filter-models=embedding"" ARGS2='""git""'",other,user_history
+crobid,cargo build,other,github_commands
+np,npm i,npm,user_history
+l-l,ls -la,filesystem,popular_commands
+s~/,source ~/.zshrc,other,user_history
+pnp,pnpm build,other,user_history
+mbu,make build,other,user_history
+car,cargo check,other,github_commands
+l-,ls -la,filesystem,popular_commands
+gp,git pull,git,user_history
+ls -l,ls -la,filesystem,fuzzy_patterns
+mak,make,other,user_history
+go ru,go run main.go serve,go,user_history
+asl-n,aws sso login --profile nulab-library,other,user_history
+npm ru,npm run build,npm,user_history
+dk ,docker ps,docker,fuzzy_patterns
+yar,yarn install,yarn,github_commands
+cb,cargo build,other,github_commands
+git comm,git commit -m,git,popular_commands
+ni,npm install,npm,popular_commands
+c .,cd ..,filesystem,fuzzy_patterns
+npm sta,npm start,npm,fuzzy_patterns
+nin,npm install,npm,popular_commands
+mvn,mvn test,other,github_commands
+GHOSTTYPE_LOG_LEVEL=debug go,GHOSTTYPE_LOG_LEVEL=debug go run main.go serve,other,user_history
+l-,ls -la,filesystem,fuzzy_patterns
+ya,yarn build,yarn,github_commands
+dcl,docker container ls,docker,popular_commands
+kde,kubectl describe,other,fuzzy_patterns
+doc,docker container ls,docker,popular_commands
+np,npm run dev,npm,user_history
+git comm,git commit -am,git,popular_commands
+gi,git status,git,popular_commands
+p-m,python3 -m,other,fuzzy_patterns
+g mtm,git commit -m,git,fuzzy_patterns
+cgp,cgpt,other,user_history
+less ~/Library/Caches/ghos,less ~/Library/Caches/ghosttype/ghosttype.log,other,user_history
+n s,npm test,npm,fuzzy_patterns
+mk ul,make build,other,github_commands
+npm,npm install,npm,popular_commands
+gh,ghosttype,other,user_history
+gc-a,git commit -am,git,popular_commands
+g o iy,go mod tidy,go,fuzzy_patterns
+nrb,npm run build,npm,user_history
+npm,npm run build,npm,user_history
+npx tailwi,npx tailwindcss -i ./src/index.css -o ./dist/test.css --config ./tailwind.config.js\,other,user_history
+git,git status --short,git,popular_commands
+go cle,go clean && make,go,user_history
+gr,gradle build,other,github_commands
+docker ps,docker ps -a,docker,popular_commands
+npm ru,npm run lint,npm,user_history
+grmtu,go run main.go tui\,go,user_history
+ybu,yarn build,yarn,github_commands
+git pul,git pull origin,git,fuzzy_patterns
+make bui,make build,other,user_history
+go ru,go run main.go notify,go,user_history
+ma,"make dev dev ARGS=""--filter-models=embedding"" ARGS2='""git ch""'",other,user_history
+gm d,go mod tidy,go,fuzzy_patterns
+nmisal-sv,npm install --save,npm,popular_commands
+git,git commit -am,git,popular_commands
+les,less ~/Library/Caches/ghosttype/ghosttype.log,other,user_history
+nt-.-.-./,npx tailwindcss -i ./src/index.css -o ./dist/test.css --config ./tailwind.config.js\,other,user_history
+mv,mvn package,other,github_commands
+pw,pwd,other,user_history
+npm ru,npm run dev,npm,user_history
+npm s,npm start,npm,fuzzy_patterns
+ma,make clean,other,github_commands
+vi,vim ~/.zshrc,other,user_history
+go,go run main.go serve\,go,user_history
+source ~/.zs,source ~/.zshrc,other,user_history
+pl,pnpm lint:fix,other,user_history
+nrdc,npm run dev commit-msg,npm,user_history
+ma,make test,other,github_commands
+git commti -m,git commit -m,git,fuzzy_patterns
+mak,make test,other,user_history
+ma,make,other,user_history
+yarn sta,yarn start,yarn,github_commands
+gpu,git push,git,user_history
+ds,docker stop,docker,fuzzy_patterns
+r-,rm -rf,filesystem,fuzzy_patterns
+"mk e e RS""-itrmdl=medn""AG2'gt'","make dev dev ARGS=""--filter-models=embedding"" ARGS2='""git""'",other,user_history
+make bui,make build,other,github_commands
+mak,make install,other,github_commands
+"nrda""","npm run dev ask ""aaa""",npm,user_history
+mi-,mkdir -p,filesystem,fuzzy_patterns
+npm,npm run dev commit-msg,npm,user_history
+gi,gitmsg,other,user_history
+go bui,go build,go,fuzzy_patterns
+gpo,git push origin,git,fuzzy_patterns
+gc-m,git commit -m,git,popular_commands
+npm,npm run test,npm,user_history
+mak,make\,other,user_history
+pn,pnpm dev,other,user_history
+ls -a,ls -al,filesystem,popular_commands
+pin,pip install,python,fuzzy_patterns
+np,npx tailwindcss -i ./src/index.css -o ./dist/test.css --config ./tailwind.config.js\,other,user_history
+cargo tes,cargo test,other,github_commands
+git,git status,git,popular_commands
+mte,mvn test,other,github_commands
+gc-m,git commit -m,git,fuzzy_patterns
+gti status,git status,git,fuzzy_patterns
+GH,GHOSTTYPE_LOG_LEVEL=debug go run main.go,other,user_history
+go mo,go mod tidy,go,fuzzy_patterns
+docker b,docker build,docker,fuzzy_patterns
+dce,docker,docker,user_history
+npm tset,npm test,npm,fuzzy_patterns
+pnp,pnpm run dev:all,other,user_history
+make inst,make install,other,github_commands
+"nrda""a","npm run dev ask ""aaa""",npm,user_history
+mi,make install,other,github_commands
+nmrnts,npm run test,npm,user_history
+s/,sqlite3 /Users/teruokunihiro/Library/Caches/ghosttype/ghosttype.db,other,user_history
+kbcldsrb,kubectl describe,other,fuzzy_patterns
+gtsau -hr,git status --short,git,popular_commands
+grmno,go run main.go notify,go,user_history
+doc,docker ps,docker,popular_commands
+assolgn-poienlblbay,aws sso login --profile nulab-library,other,user_history
+git s,git status,git,fuzzy_patterns
+rm r-f,rm -rf,filesystem,fuzzy_patterns
+make de,"make dev dev ARGS=""--filter-models=embedding"" ARGS2='""git""'",other,user_history
+yar,yarn start,yarn,github_commands
+cargo che,cargo check,other,github_commands
+v~,vim ~/.zshrc,other,user_history
+Ggrm,GHOSTTYPE_LOG_LEVEL=debug go run main.go,other,user_history
+gru,gradle run,other,github_commands
+n.a-aa,node ./dist/chatgpt-dev-utils.js ask --presets=explain aaa,other,user_history
+mv,mvn test,other,github_commands
+go ru,go run main.go serve\,go,user_history
+docker bui,docker build,docker,fuzzy_patterns
+gi,git commit -am,git,popular_commands
+git stat,git status --short,git,popular_commands
+ma,make install,other,github_commands
+l-l,ls -l,filesystem,popular_commands
+npm urn build,npm run build,npm,fuzzy_patterns
+g u ang ev\,go run main.go serve\,go,user_history
+gpor,git push origin,git,fuzzy_patterns
+ca,cargo test,other,github_commands
+make inst,make install,other,user_history
+git,git pull,git,user_history
+nrbu,npm run build,npm,fuzzy_patterns
+mb,make build,other,github_commands
+npm r,npm run build,npm,fuzzy_patterns
+mk ntl,make install,other,github_commands
+mc,make compare-tools,other,user_history
+gmti,go mod tidy,go,user_history
+ni-,npm install --save,npm,popular_commands
+gi,git commit --amend,git,popular_commands
+mak,make compare-tools,other,user_history
+g sog,git push origin,git,fuzzy_patterns
+mddAA,"make dev dev ARGS=""--filter-models=embedding"" ARGS2='""git""'",other,user_history
+npm,npm install --save,npm,popular_commands
+kubectl d,kubectl describe,other,fuzzy_patterns
+npm inst,npm install --save,npm,popular_commands
+kubectld escribe,kubectl describe,other,fuzzy_patterns
+gho,ghosttype,other,user_history
+npm tes,npm test,npm,user_history
+npx,npx repomix,other,user_history
+doc,docker ps -a,docker,popular_commands
+Ggrms,GHOSTTYPE_LOG_LEVEL=debug go run main.go serve,other,user_history
+so,source ~/.zshrc,other,user_history
+rm -r,rm -rf,filesystem,fuzzy_patterns
+dcoker ps,docker ps,docker,fuzzy_patterns
+GHO,GHOSTTYPE_LOG_LEVEL=debug go run main.go serve,other,user_history
+ma,make\,other,user_history
+go,go run main.go tui\,go,user_history
+asl-nu,aws sso login --profile nulab-library,other,user_history
+go ,go run main.go serve,go,user_history
+mkdir -,mkdir -p,filesystem,fuzzy_patterns
+git upsh origin,git push origin,git,fuzzy_patterns
+gal ul,gradle build,other,github_commands
+dps,docker ps,docker,popular_commands
+npm,npm i,npm,popular_commands
+ls ,ls -l,filesystem,user_history
+gradle bui,gradle build,other,github_commands
+np,npm run dev commit-msg,npm,user_history
+n.a-a,node ./dist/chatgpt-dev-utils.js ask --presets=explain aaa,other,user_history
+Ntnt-tte,NODE_OPTIONS='--loader ts-node/esm' npx ts-node --require tsconfig-paths/register test.ts\,other,user_history
+r-,rm -rf,filesystem,fuzzy_patterns
+nmrndvcmi-s,npm run dev commit-msg,npm,user_history
+g u ang oiy,go run main.go notify,go,user_history
+"nmrndvak""a""","npm run dev ask ""aaa""",npm,user_history
+ma,make build,other,github_commands
+mk la,make clean,other,github_commands
+pn,pnpm build,other,user_history
+npm,npm run start,npm,user_history
+gbu,go build,go,fuzzy_patterns
+ti,tig,other,user_history
+ni,npm i,npm,popular_commands
+keleps,kubectl get pods,other,fuzzy_patterns
+mak,make build,other,github_commands
+nrde,npm run dev,npm,user_history
+gs,git status,git,fuzzy_patterns
+g ul,go build,go,fuzzy_patterns
+mcl,make clean,other,github_commands
+sqlite3 /Users/teruokunihiro/Library/C,sqlite3 /Users/teruokunihiro/Library/Caches/ghosttype/ghosttype.db,other,user_history
+python3 -,python3 -m,other,fuzzy_patterns
+pp itfx,pnpm lint:fix,other,user_history
+no,node ./dist/chatgpt-dev-utils.js ask --presets=explain aaa,other,user_history
+doc,docker,docker,user_history
+sou,source ~/.zshrc,other,user_history
+cc,cargo check,other,github_commands
+nt,npm test,npm,fuzzy_patterns
+l l,ls -l,filesystem,popular_commands
+s~,source ~/.zshrc,other,user_history
+npm i,npm install,npm,fuzzy_patterns
+Ggrma,GHOSTTYPE_LOG_LEVEL=debug go run main.go,other,user_history
+mvn tes,mvn test,other,github_commands
+mak,make,other,user_history
+mci,mvn clean install,other,github_commands
+git p,git pull origin,git,fuzzy_patterns
+nst,npm start,npm,fuzzy_patterns
+mnts,mvn test,other,github_commands
+nrte,npm run test,npm,user_history
+car,cargo build,other,github_commands
+go,go clean && make,go,user_history
+gi,git status --short,git,popular_commands
+mak,"make dev dev ARGS=""--filter-models=embedding"" ARGS2='""git ch""'",other,user_history
+crorn,cargo run,other,github_commands
+dce s,docker ps,docker,fuzzy_patterns
+g log,git pull origin,git,fuzzy_patterns
+gts,gitmsg,other,user_history
+mak,make\,other,user_history
+go,go run main.go serve,go,user_history
+np,npm run test,npm,user_history
+c .,cd ../,filesystem,user_history
+nod,node ./dist/chatgpt-dev-utils.js ask --presets=explain aaa,other,user_history
+nrst,npm run start,npm,user_history
+ph3m,python3 -m,other,fuzzy_patterns
+kgpo,kubectl get pods,other,fuzzy_patterns
+GH,GHOSTTYPE_LOG_LEVEL=debug go run main.go serve,other,user_history
+gra,gradle build,other,github_commands
+pip inst,pip install,python,fuzzy_patterns
+nod,node -v,other,user_history
+ma,"make dev dev ARGS=""--filter-models=embedding"" ARGS2='""git""'",other,user_history
+nin,npm install,npm,fuzzy_patterns
+mvn,mvn package,other,github_commands
+GOTYELGLVLdbgg u ang,GHOSTTYPE_LOG_LEVEL=debug go run main.go,other,user_history
+ti,tig,other,user_history
+cd. .,cd ..,filesystem,fuzzy_patterns
+dbu,docker build,docker,fuzzy_patterns
+p sl,pip install,python,fuzzy_patterns
+gs--,git status --short,git,popular_commands
+nrl,npm run lint,npm,user_history
+l s-la,ls -la,filesystem,fuzzy_patterns
+gitm,gitmsg,other,user_history
+gst,git status,git,popular_commands
+mb,make build,other,user_history
+vim,vim ~/.zshrc,other,user_history
+mddAAc,"make dev dev ARGS=""--filter-models=embedding"" ARGS2='""git ch""'",other,user_history
+ca,cargo run,other,github_commands
+ka-f,kubectl apply -f,other,fuzzy_patterns
+yi,yarn install,yarn,github_commands
+grmt,go run main.go tui\,go,user_history
+mdr-,mkdir -p,filesystem,fuzzy_patterns
+gpu,git pull,git,user_history
+docker ru,docker run,docker,fuzzy_patterns
+dce ul,docker build,docker,fuzzy_patterns
+gotye,ghosttype,other,user_history
+mv,mvn clean install,other,github_commands
+npm,"npm run dev ask ""aaa""",npm,user_history
+git,git commit -m,git,popular_commands
+nre,npx repomix,other,user_history
+nrbu,npm run build,npm,user_history
+l-l,ls -l,filesystem,user_history
+gc&ma,go clean && make,go,user_history
+car,cargo test,other,github_commands
+ls -,ls -la,filesystem,fuzzy_patterns
+gh,ghosttype,other,user_history
+npm inst,npm install,npm,popular_commands
+go b,go build,go,fuzzy_patterns
+np,npm run lint,npm,user_history
+pnp,pnpm dev,other,user_history
+go,go mod tidy,go,user_history
+do,docker ps -a,docker,popular_commands
+git,git st,git,popular_commands
+gi,git push,git,user_history
+gs,git status,git,popular_commands
+mak,make,other,user_history
+nmi,npm i,npm,user_history
+make cle,make clean,other,github_commands
+ya,yarn install,yarn,github_commands
+p-,python3 -m,other,fuzzy_patterns
+mcin,mvn clean install,other,github_commands
+ls /irr/ahsgotyegotyelg,less ~/Library/Caches/ghosttype/ghosttype.log,other,user_history
+slt3/sr/euknhr/irr/ahsgotyegotyed,sqlite3 /Users/teruokunihiro/Library/Caches/ghosttype/ghosttype.db,other,user_history
+nxtiwncs- /r/ne.s o.ds/etcs-cni /alidcni.s,npx tailwindcss -i ./src/index.css -o ./dist/test.css --config ./tailwind.config.js\,other,user_history
+np,npm test,npm,user_history
+v~/,vim ~/.zshrc,other,user_history
+c.,cd ..,filesystem,fuzzy_patterns
+dr,docker run,docker,fuzzy_patterns
+grmse,go run main.go serve,go,user_history
+npx,npx tailwindcss -i ./src/index.css -o ./dist/test.css --config ./tailwind.config.js\,other,user_history
+gs-,git status --short,git,popular_commands
+git pull roigin,git pull origin,git,fuzzy_patterns
+go ,go run main.go tui\,go,user_history
+gr,gradle run,other,github_commands
+do,docker container ls,docker,popular_commands
+npm ru,"npm run dev ask ""aaa""",npm,user_history
+ni,npm install,npm,fuzzy_patterns
+gts,git st,git,popular_commands
+mk\,make\,other,user_history
+l-l,ls -la,filesystem,fuzzy_patterns
+nmts,npm test,npm,fuzzy_patterns
+pbu,pnpm build,other,user_history
+gc-,git commit -m,git,fuzzy_patterns
+co,code .,other,user_history
+pto3-,python3 -m,other,fuzzy_patterns
+Ggrmse,GHOSTTYPE_LOG_LEVEL=debug go run main.go serve,other,user_history
+git comm,git commit --amend,git,popular_commands
+suc /zhc,source ~/.zshrc,other,user_history
+s/U,sqlite3 /Users/teruokunihiro/Library/Caches/ghosttype/ghosttype.db,other,user_history
+gho,ghosttype,other,user_history
+gt,gradle test,other,github_commands
+np,npx repomix,other,user_history
+docker conta,docker container ls,docker,popular_commands
+mp,mvn package,other,github_commands
+ka-,kubectl apply -f,other,fuzzy_patterns
+pd,pwd,other,user_history
+npm,npm test,npm,user_history
+npm,npm run lint,npm,user_history
+sql,sqlite3 /Users/teruokunihiro/Library/Caches/ghosttype/ghosttype.db,other,user_history
+npm ru,npm run start,npm,user_history
+cd ,cd ../,filesystem,user_history
+nte,npm test,npm,user_history
+git pul,git pull,git,user_history
+npms tart,npm start,npm,fuzzy_patterns
+dru,docker run,docker,fuzzy_patterns
+cbu,cargo build,other,github_commands
+pw,pwd,other,user_history
+n sl,npm install,npm,fuzzy_patterns
+dce u,docker run,docker,fuzzy_patterns
+dp-,docker ps -a,docker,popular_commands
+gra,gradle run,other,github_commands
+gr,gradle test,other,github_commands
+grms,go run main.go serve,go,user_history
+pb,pnpm build,other,user_history
+gte,gradle test,other,github_commands
+gtsau,git status,git,fuzzy_patterns
+mpa,mvn package,other,github_commands
+mt,mvn test,other,github_commands
+mncenisal,mvn clean install,other,github_commands
+kubcetl apply -f,kubectl apply -f,other,fuzzy_patterns
+min,make install,other,github_commands
+pn,pnpm test:e2e,other,user_history
+gi,gitmsg,other,user_history
+kubectl descr,kubectl describe,other,fuzzy_patterns
+go,go run main.go,go,user_history
+dce s,docker ps,docker,popular_commands
+dk i,docker build,docker,fuzzy_patterns
+git,git push,git,user_history
+gbl,go build,go,fuzzy_patterns
+grmse,go run main.go serve\,go,user_history
+ghostt,ghosttype,other,user_history
+git stat,git status,git,fuzzy_patterns
+nrt,npm run test,npm,user_history
+ct,cargo test,other,github_commands
+gb,gradle build,other,github_commands
+mak,make build,other,user_history
+kgp,kubectl get pods,other,fuzzy_patterns
+nt,npm test,npm,user_history
+pn,pnpm lint:fix,other,user_history
+GOTYELGLVLdbgg u ang ev,GHOSTTYPE_LOG_LEVEL=debug go run main.go serve,other,user_history
+car,cargo run,other,github_commands
+python3 m-,python3 -m,other,fuzzy_patterns
+nmrnbid,npm run build,npm,user_history
+prd,pnpm run dev:all,other,user_history
+ma,make install,other,user_history
+mk,make,other,user_history
+go m,go mod tidy,go,fuzzy_patterns

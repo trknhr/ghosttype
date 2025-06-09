@@ -1,4 +1,4 @@
-package context_test
+package setting_test
 
 import (
 	"os"
@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/trknhr/ghosttype/model"
-	"github.com/trknhr/ghosttype/model/context"
+	"github.com/trknhr/ghosttype/model/setting"
 )
 
 func writeFile(t *testing.T, dir, name, content string) {
@@ -46,7 +46,7 @@ build:
 </project>
 `)
 
-	model := context.NewContextModelFromDir(tmpDir)
+	model := setting.NewContextModelFromDir(tmpDir)
 
 	tests := []struct {
 		input    string

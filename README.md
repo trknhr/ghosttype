@@ -20,6 +20,31 @@ Using a hybrid of traditional and AI-enhanced models, Ghosttype intelligently su
 Ghosttype is still under active development.
 Expect occasional breaking changes. Contributions and issue reports are welcome!
 
+## 📊 Performance & Benchmarks
+
+**Current Performance vs. Popular Tools**
+
+We regularly benchmark Ghosttype against established command-line tools to track our progress:
+```
+🏆 BENCHMARK RESULTS (600 test cases)
+┌─────────────┬─────────┬─────────┬─────────┬───────────┬──────────┐
+│ Tool        │ Top-1   │ Top-10  │ Avg Time│ P95 Time  │ Errors   │
+├─────────────┼─────────┼─────────┼─────────┼───────────┼──────────┤
+│ 👑 ghosttype │   20.0% │   36.0% │ 832ms   │    2.1s   │    0.0%  │
+│ fzf         │    8.0% │   14.0% │  19ms   │   24ms    │   54.0%  │
+└─────────────┴─────────┴─────────┴─────────┴───────────┴──────────┘
+```
+
+**What we're doing well:**
+- **2.5x more accurate** command predictions than traditional fuzzy finders
+- **Zero errors** vs 54% error rate in string-based matching
+- **Better semantic understanding** of command intent
+
+**What we're working on:**
+- **Latency optimization**: Current ~800ms response time needs improvement for real-time use
+- **Model efficiency**: Exploring lighter models and caching strategies  
+- **Progressive loading**: Show fast results immediately, then enhance with AI suggestions
+- **Hybrid approach**: Instant prefix matching for short inputs, AI for complex queries
 
 ## 🚀 Demo
 

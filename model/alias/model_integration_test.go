@@ -6,6 +6,7 @@ import (
 
 	"github.com/trknhr/ghosttype/model"
 	"github.com/trknhr/ghosttype/model/alias"
+
 	_ "github.com/tursodatabase/go-libsql"
 )
 
