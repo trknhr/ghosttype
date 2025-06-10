@@ -83,7 +83,7 @@ func (c *HTTPClient) Embed(text string) (*OllamaEmbedResponse, error) {
 }
 
 func (c *HTTPClient) Generate(prompt string) (*OllamaCompleteResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	reqBody, err := json.Marshal(map[string]interface{}{

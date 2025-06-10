@@ -26,17 +26,26 @@ Expect occasional breaking changes. Contributions and issue reports are welcome!
 
 We regularly benchmark Ghosttype against established command-line tools to track our progress:
 ```
-🏆 BENCHMARK RESULTS (600 test cases)
 ┌─────────────┬─────────┬─────────┬─────────┬───────────┬──────────┐
 │ Tool        │ Top-1   │ Top-10  │ Avg Time│ P95 Time  │ Errors   │
 ├─────────────┼─────────┼─────────┼─────────┼───────────┼──────────┤
-│ 👑 ghosttype │   20.0% │   36.0% │ 832ms   │    2.1s   │    0.0%  │
-│ fzf         │    8.0% │   14.0% │  19ms   │   24ms    │   54.0%  │
+│ 👑 ghosttype │   16.0% │   31.0% │ 158.483ms │ 255.674ms │     0.5% │
+│ fzf         │    7.5% │   13.5% │ 10.846ms │  15.67ms │    41.5% │
 └─────────────┴─────────┴─────────┴─────────┴───────────┴──────────┘
+
+🥇 WINNERS BY METRIC:
+  Best Top-1 Accuracy: ghosttype
+  Best Top-10 Accuracy: ghosttype
+  Fastest Average Response: fzf
+  Best P95 Latency: fzf
+  Most Reliable: ghosttype
+
+💡 GHOSTTYPE ADVANTAGES:
+  ✅ 2x more accurate than fzf (16.0% vs 7.5%)
 ```
 
 **What we're doing well:**
-- **2.5x more accurate** command predictions than traditional fuzzy finders
+- **2x more accurate** command predictions than traditional fuzzy finders
 - **Zero errors** vs 54% error rate in string-based matching
 - **Better semantic understanding** of command intent
 
@@ -45,6 +54,8 @@ We regularly benchmark Ghosttype against established command-line tools to track
 - **Model efficiency**: Exploring lighter models and caching strategies  
 - **Progressive loading**: Show fast results immediately, then enhance with AI suggestions
 - **Hybrid approach**: Instant prefix matching for short inputs, AI for complex queries
+- **Deeper contextual understanding**: Providing more relevant suggestions by analyzing the current directory's files, git status, and recently executed commands.
+- **Intelligent error correction**: Suggesting corrections for typos or common errors (e.g., correcting gti status to git status).
 
 ## 🚀 Demo
 
@@ -129,11 +140,11 @@ Ghosttype uses the following models:
 Download the models:
 
 ```bash
-ollama run llama3.2           # Starts and downloads the LLM model
+ollama run llama3.2:1b           # Starts and downloads the LLM model
 ollama pull nomic-embed-text  # Downloads the embedding model
 ```
 
-ℹ️ ollama run llama3.2 must be running in the background to enable LLM-powered suggestions.
+ℹ️ ollama run llama3.2:1b must be running in the background to enable LLM-powered suggestions.
 
 You can run it in a separate terminal window:
 Once Ollama is running and the models are downloaded, Ghosttype will automatically use them to enhance prediction accuracy.

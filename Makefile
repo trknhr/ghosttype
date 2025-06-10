@@ -232,6 +232,129 @@ demo-comparison: ## Quick demo comparison
 	@make check-fzf
 	@make benchmark-small
 
+# Performance profiling targets
+profile-cpu: ## Profile CPU usage during predictions
+	@echo "🔍 CPU profiling..."
+	go run main.go profile cpu --input "git st" --iterations 100 --output cpu.prof
+
+profile-memory: ## Profile memory allocation
+	@echo "💾 Memory profiling..."
+	go run main.go profile memory --input "docker run" --iterations 50 --output memory.prof
+
+profile-ensemble: ## Profile ensemble model performance
+	@echo "🎭 Ensemble profiling..."
+	go run main.go profile ensemble --file $(OUTPUT_DIR)/eval_balanced.csv --cases 20 --output ensemble.prof
+
+profile-quick: ## Quick performance check
+	@echo "⚡ Quick profiling..."
+	go run main.go profile quick --duration 30s
+
+# Profile analysis
+analyze-cpu: profile-cpu ## Analyze CPU profile in browser
+	@echo "🌐 Opening CPU profile in browser..."
+	go tool pprof -http=:8080 cpu.prof
+
+analyze-memory: profile-memory ## Analyze memory profile in browser  
+	@echo "🌐 Opening memory profile in browser..."
+	go tool pprof -http=:8080 memory.prof
+
+analyze-ensemble: profile-ensemble ## Analyze ensemble profile
+	@echo "🌐 Opening ensemble profile in browser..."
+	go tool pprof -http=:8080 ensemble.prof
+
+# Compare before/after optimization
+profile-baseline: ## Create baseline performance profile
+	@echo "📊 Creating baseline profile..."
+	@mkdir -p ./profiles/baseline
+	go run main.go profile quick --duration 60s
+	mv quick_profile.prof ./profiles/baseline/
+	@echo "📄 Baseline saved to ./profiles/baseline/"
+
+profile-compare: ## Compare current performance with baseline
+	@echo "⚔️  Comparing performance..."
+	@mkdir -p ./profiles/current
+	go run main.go profile quick --duration 60s  
+	mv quick_profile.prof ./profiles/current/
+	@echo "📊 Compare with: go tool pprof -diff_base ./profiles/baseline/quick_profile.prof ./profiles/current/quick_profile.prof"
+
+# All-in-one profiling
+profile-all: ## Run comprehensive profiling suite
+	@echo "🔬 Comprehensive profiling..."
+	@make profile-cpu
+	@make profile-memory  
+	@make profile-ensemble
+	@echo "✅ All profiles complete! Use 'make analyze-*' to view results"
+
+
+# Enhanced ensemble profiling with network timing
+profile-ensemble-detailed: ## Detailed ensemble profiling with network breakdown
+	@echo "🎭 Detailed ensemble profiling..."
+	go run main.go profile ensemble \
+		--file $(OUTPUT_DIR)/eval_balanced.csv \
+		--cases 20 \
+		--output ensemble_detailed.prof \
+		--verbose \
+		--trace
+
+# Compare network vs CPU performance
+profile-network-analysis: ## Analyze network vs CPU performance
+	@echo "🌐 Network performance analysis..."
+	@echo "1️⃣  CPU-only profiling..."
+	@make profile-cpu PROFILE_ITERATIONS=20
+	@echo "\n2️⃣  Ensemble with network..."
+	@make profile-ensemble-detailed
+	@echo "\n📊 Compare with:"
+	@echo "   CPU only: cpu.prof"
+	@echo "   Full ensemble: ensemble_detailed.prof"
+
+# Real-time latency monitoring
+profile-realtime: ## Real-time latency monitoring
+	@echo "📡 Real-time ensemble monitoring..."
+	go run main.go profile ensemble \
+		--file $(OUTPUT_DIR)/eval_balanced.csv \
+		--cases 50 \
+		--verbose | tee ensemble_realtime.log
+
+# Blocking profile (network I/O waiting time)
+profile-blocking: ## Profile blocking operations (network, I/O waits)
+	@echo "🚧 Blocking operations profiling..."
+	go run main.go profile blocking --input "git st" --iterations 50 --output blocking.prof
+
+# Goroutine profile
+profile-goroutine: ## Profile goroutine usage and patterns
+	@echo "🔀 Goroutine profiling..."
+	go run main.go profile goroutine --input "git st" --iterations 50 --output goroutine.prof
+
+# All profile types at once
+profile-comprehensive: ## Run all profile types (CPU, memory, blocking, goroutine, mutex)
+	@echo "🔬 Comprehensive profiling..."
+	go run main.go profile all-types --input "git st" --iterations 30 --output comprehensive.prof
+
+# Analyze blocking profile (key for network timing!)
+analyze-blocking: profile-blocking ## Analyze blocking profile for network waits
+	@echo "🌐 Opening blocking profile (shows network waits)..."
+	go tool pprof -http=:8080 blocking_blocking.prof
+
+# Compare all profiles
+analyze-all: profile-comprehensive ## Open all profiles in different ports
+	@echo "🔍 Opening all profiles..."
+	@echo "CPU (compute):     http://localhost:8080"
+	@echo "Blocking (I/O):    http://localhost:8081" 
+	@echo "Goroutines:        http://localhost:8082"
+	@echo "Memory:            http://localhost:8083"
+	go tool pprof -http=:8080 comprehensive_cpu.prof &
+	go tool pprof -http=:8081 comprehensive_blocking.prof &
+	go tool pprof -http=:8082 comprehensive_goroutine.prof &
+	go tool pprof -http=:8083 comprehensive_memory.prof &
+	@echo "🎯 Focus on BLOCKING profile for network timing!"
+
+# Quick network timing analysis
+profile-network-wait: ## Quick analysis of network wait times
+	@echo "⚡ Quick network wait analysis..."
+	go run main.go profile blocking --input "git st" --iterations 20
+	@echo "\n🔍 Check blocking profile for network waits:"
+	@echo "   go tool pprof -top comprehensive_blocking.prof"
+
 help:
 	@echo ""
 	@echo "Available targets:"

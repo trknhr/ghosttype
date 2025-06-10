@@ -47,7 +47,7 @@ func GenerateModel(db *sql.DB, filterModels string) model.SuggestModel {
 
 	// launchWorker(db)
 
-	ollamaClient := ollama.NewHTTPClient("llama3.2", "nomic-embed-text")
+	ollamaClient := ollama.NewHTTPClient("llama3.2:1b", "nomic-embed-text")
 	enabled := map[string]bool{}
 
 	if filterModels == "" {

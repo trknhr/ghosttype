@@ -67,6 +67,7 @@ func Execute(db *sql.DB) error {
 	cmd.AddCommand(NewBatchEvalCmd(db))
 	cmd.AddCommand(NewEnsembleEvalCmd(db))
 	cmd.AddCommand(NewBenchmarkCmd(db))
+	cmd.AddCommand(NewProfileCmd(db))
 
 	return cmd.Execute()
 }

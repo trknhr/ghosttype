@@ -23,6 +23,10 @@ func main() {
 		log.Fatalf("failed to migrate schema: %v", err)
 	}
 
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(0)
+
 	if err := cmd.Execute(db); err != nil {
 		log.Fatal(err)
 	}
