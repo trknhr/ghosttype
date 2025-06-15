@@ -24,7 +24,7 @@ import (
 	"github.com/trknhr/ghosttype/ollama"
 )
 
-func GenerateModel(db *sql.DB, filterModels string) model.SuggestModel {
+func GenerateModel(db *sql.DB, filterModels string) *ensemble.Ensemble {
 	historyPath := os.Getenv("HOME") + "/.zsh_history"
 	historyEntries, err := history.LoadZshHistoryTail(historyPath, 100)
 	if err != nil {
@@ -64,27 +64,29 @@ func GenerateModel(db *sql.DB, filterModels string) model.SuggestModel {
 		}
 	}
 
-	var models []model.SuggestModel
+	var lightModels []model.SuggestModel
+	var heavyModels []model.SuggestModel
 
 	if enabled["markov"] {
 		m := markov.NewMarkovModel()
 		m.Learn(cleaned)
-		models = append(models, m)
+		lightModels = append(lightModels, m)
 	}
 	if enabled["freq"] {
 		m := freq.NewFreqModel(db)
-		models = append(models, m)
+		lightModels = append(lightModels, m)
 	}
 	if enabled["prefix"] {
 		m := prefix.NewPrefixModel(db)
-		models = append(models, m)
+		lightModels = append(lightModels, m)
+
 	}
 	if enabled["alias"] {
-		models = append(models, alias.NewAliasModel(alias.NewSQLAliasStore(db)))
+		lightModels = append(lightModels, alias.NewAliasModel(alias.NewSQLAliasStore(db)))
 	}
 	if enabled["context"] {
 		root, _ := os.Getwd()
-		models = append(models, setting.NewContextModelFromDir(root))
+		lightModels = append(lightModels, setting.NewContextModelFromDir(root))
 	}
 	if enabled["embedding"] {
 		m := embedding.NewModel(embedding.NewEmbeddingStore(db), ollamaClient)
@@ -94,7 +96,7 @@ func GenerateModel(db *sql.DB, filterModels string) model.SuggestModel {
 			utils.WarnOnce()
 		} else {
 			go m.Learn(cleaned)
-			models = append(models, m)
+			heavyModels = append(heavyModels, m)
 		}
 
 	}
@@ -106,12 +108,12 @@ func GenerateModel(db *sql.DB, filterModels string) model.SuggestModel {
 		if err != nil {
 			utils.WarnOnce()
 		} else {
-			models = append(models, llmModel)
+			heavyModels = append(heavyModels, llmModel)
 		}
 
 	}
 
-	return ensemble.New(models...)
+	return ensemble.NewWithClassification(lightModels, heavyModels)
 }
 
 func SaveHistory(db *sql.DB, entries []string) error {

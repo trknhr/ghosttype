@@ -25,7 +25,7 @@ run: build
 
 install:
 	@echo "📦 Installing $(APP_NAME)..."
-	$(GO) install ./...
+	$(GO) install -ldflags="-s -w" ./...
 
 clean:
 	@echo "🧹 Cleaning build artifacts..."
