@@ -1,4 +1,4 @@
-package cmd
+package benchmark
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/trknhr/ghosttype/cmd/eval"
 	"github.com/trknhr/ghosttype/internal/history"
 	"github.com/trknhr/ghosttype/internal/model"
 	"github.com/trknhr/ghosttype/internal/model/entity"
@@ -164,7 +165,7 @@ func runCPUProfile(db *sql.DB) error {
 
 	pmodel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, "")
 
-	model.DrainAndLogEvents(events)
+	model.DrainAndLogEvents(events, true)
 	if pmodel == nil {
 		return fmt.Errorf("failed to create model")
 	}
@@ -218,7 +219,7 @@ func runMemoryProfile(db *sql.DB) error {
 	ollamaClient := ollama.NewHTTPClient("llama3.2:1b", "nomic-embed-text")
 
 	pmodel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, "")
-	model.DrainAndLogEvents(events)
+	model.DrainAndLogEvents(events, true)
 	if pmodel == nil {
 		return fmt.Errorf("failed to create model")
 	}
@@ -281,7 +282,7 @@ func runEnsembleProfile(db *sql.DB) error {
 	fmt.Printf("📊 Cases: %d\n", profileCases)
 
 	// Load test cases
-	cases, err := loadEvaluationCases(profileFile)
+	cases, err := eval.LoadEvaluationCases(profileFile)
 	if err != nil {
 		return fmt.Errorf("failed to load evaluation cases: %w", err)
 	}
@@ -301,7 +302,7 @@ func runEnsembleProfile(db *sql.DB) error {
 	ollamaClient := ollama.NewHTTPClient("llama3.2:1b", "nomic-embed-text")
 	pmodel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, modelFilter)
 
-	model.DrainAndLogEvents(events)
+	model.DrainAndLogEvents(events, true)
 	if pmodel == nil {
 		return fmt.Errorf("failed to create ensemble model")
 	}
@@ -446,7 +447,7 @@ func runQuickProfile(db *sql.DB) error {
 	ollamaClient := ollama.NewHTTPClient("llama3.2:1b", "nomic-embed-text")
 	pmodel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, "")
 
-	model.DrainAndLogEvents(events)
+	model.DrainAndLogEvents(events, true)
 	if pmodel == nil {
 		return fmt.Errorf("failed to create model")
 	}
@@ -559,7 +560,7 @@ func runBlockingProfile(db *sql.DB) error {
 	ollamaClient := ollama.NewHTTPClient("llama3.2:1b", "nomic-embed-text")
 	pmodel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, "")
 
-	model.DrainAndLogEvents(events)
+	model.DrainAndLogEvents(events, true)
 	if pmodel == nil {
 		return fmt.Errorf("failed to create model")
 	}
@@ -611,7 +612,7 @@ func runGoroutineProfile(db *sql.DB) error {
 	hitoryLoader := history.NewHistoryLoaderAuto()
 	ollamaClient := ollama.NewHTTPClient("llama3.2:1b", "nomic-embed-text")
 	pmodel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, "")
-	model.DrainAndLogEvents(events)
+	model.DrainAndLogEvents(events, true)
 
 	if pmodel == nil {
 		return fmt.Errorf("failed to create model")

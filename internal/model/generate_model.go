@@ -112,7 +112,6 @@ func GenerateModel(
 		go func() {
 			_, err := llmModel.Predict("echo")
 			if err != nil {
-				// utils.WarnOnce()
 				ch <- ModelInitEvent{Name: "llm", Status: ModelError, Err: err}
 			} else {
 				ensembleModel.AddHeavyModel(llmModel)

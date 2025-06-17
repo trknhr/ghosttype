@@ -1,19 +1,22 @@
-package cmd
+package generate
 
 import (
+	"bufio"
 	"encoding/csv"
 	"fmt"
 	"math/rand"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/trknhr/ghosttype/cmd/eval"
 )
 
 type EvalDataSource struct {
 	Name        string
 	Weight      float64 // Percentage of total dataset
-	Generator   func(int) ([]EvaluationCase, error)
+	Generator   func(int) ([]eval.EvaluationCase, error)
 	Description string
 }
 
@@ -24,15 +27,20 @@ type PopularCommand struct {
 	Variations  []string
 }
 
-var generateBalancedCmd = &cobra.Command{
-	Use:   "balanced",
+type CommandFreq struct {
+	Command string
+	Count   int
+}
+
+var GenerateBalancedCmd = &cobra.Command{
+	Use:   "generate",
 	Short: "Generate balanced evaluation dataset from multiple sources",
 	Example: `
   # Generate balanced dataset
-  ghosttype generate balanced --output eval_balanced.csv --count 1000
+  ghosttype generate --output eval_balanced.csv --count 1000
   
   # Custom weights
-  ghosttype generate balanced --output eval_balanced.csv --count 1000 \
+  ghosttype generate --output eval_balanced.csv --count 1000 \
     --history-weight 40 --popular-weight 40 --fuzzy-weight 20`,
 	RunE: generateBalancedEvalData,
 }
@@ -48,15 +56,13 @@ var (
 )
 
 func init() {
-	generateBalancedCmd.Flags().StringVarP(&balancedOutput, "output", "o", "eval_balanced.csv", "Output CSV file")
-	generateBalancedCmd.Flags().IntVarP(&balancedCount, "count", "c", 1000, "Total number of test cases")
-	generateBalancedCmd.Flags().Float64Var(&historyWeight, "history-weight", 30.0, "Percentage from user history")
-	generateBalancedCmd.Flags().Float64Var(&popularWeight, "popular-weight", 40.0, "Percentage from popular commands")
-	generateBalancedCmd.Flags().Float64Var(&fuzzyWeight, "fuzzy-weight", 20.0, "Percentage from fuzzy patterns")
-	generateBalancedCmd.Flags().Float64Var(&githubWeight, "github-weight", 10.0, "Percentage from GitHub commands")
-	generateBalancedCmd.Flags().StringVar(&userHistoryFile, "history", "~/.zsh_history", "Path to user history file")
-
-	generateCmd.AddCommand(generateBalancedCmd)
+	GenerateBalancedCmd.Flags().StringVarP(&balancedOutput, "output", "o", "eval_balanced.csv", "Output CSV file")
+	GenerateBalancedCmd.Flags().IntVarP(&balancedCount, "count", "c", 1000, "Total number of test cases")
+	GenerateBalancedCmd.Flags().Float64Var(&historyWeight, "history-weight", 30.0, "Percentage from user history")
+	GenerateBalancedCmd.Flags().Float64Var(&popularWeight, "popular-weight", 40.0, "Percentage from popular commands")
+	GenerateBalancedCmd.Flags().Float64Var(&fuzzyWeight, "fuzzy-weight", 20.0, "Percentage from fuzzy patterns")
+	GenerateBalancedCmd.Flags().Float64Var(&githubWeight, "github-weight", 10.0, "Percentage from GitHub commands")
+	GenerateBalancedCmd.Flags().StringVar(&userHistoryFile, "history", "~/.zsh_history", "Path to user history file")
 }
 
 func generateBalancedEvalData(cmd *cobra.Command, args []string) error {
@@ -98,7 +104,7 @@ func generateBalancedEvalData(cmd *cobra.Command, args []string) error {
 		},
 	}
 
-	var allCases []EvaluationCase
+	var allCases []eval.EvaluationCase
 
 	for _, source := range sources {
 		count := int(float64(balancedCount) * source.Weight / 100)
@@ -139,7 +145,7 @@ func generateBalancedEvalData(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func generateFromUserHistory(count int) ([]EvaluationCase, error) {
+func generateFromUserHistory(count int) ([]eval.EvaluationCase, error) {
 	// Parse user's actual history
 	commands, err := parseHistoryFile(expandPath(userHistoryFile))
 	if err != nil {
@@ -152,7 +158,7 @@ func generateFromUserHistory(count int) ([]EvaluationCase, error) {
 		return nil, fmt.Errorf("no frequent commands found in history")
 	}
 
-	var cases []EvaluationCase
+	var cases []eval.EvaluationCase
 	for _, cmdFreq := range frequent {
 		if len(cases) >= count {
 			break
@@ -167,7 +173,7 @@ func generateFromUserHistory(count int) ([]EvaluationCase, error) {
 				break
 			}
 
-			cases = append(cases, EvaluationCase{
+			cases = append(cases, eval.EvaluationCase{
 				Input:    pattern,
 				Expected: cmd,
 				Category: getCommandCategory(cmd),
@@ -178,9 +184,9 @@ func generateFromUserHistory(count int) ([]EvaluationCase, error) {
 	return cases[:min(count, len(cases))], nil
 }
 
-func generateFromPopularCommands(count int) ([]EvaluationCase, error) {
+func generateFromPopularCommands(count int) ([]eval.EvaluationCase, error) {
 	popular := getPopularCommands()
-	var cases []EvaluationCase
+	var cases []eval.EvaluationCase
 
 	for _, cmd := range popular {
 		if len(cases) >= count {
@@ -194,7 +200,7 @@ func generateFromPopularCommands(count int) ([]EvaluationCase, error) {
 				break
 			}
 
-			cases = append(cases, EvaluationCase{
+			cases = append(cases, eval.EvaluationCase{
 				Input:    pattern,
 				Expected: cmd.Command,
 				Category: cmd.Category,
@@ -213,7 +219,7 @@ func generateFromPopularCommands(count int) ([]EvaluationCase, error) {
 					break
 				}
 
-				cases = append(cases, EvaluationCase{
+				cases = append(cases, eval.EvaluationCase{
 					Input:    pattern,
 					Expected: variation,
 					Category: cmd.Category,
@@ -225,7 +231,7 @@ func generateFromPopularCommands(count int) ([]EvaluationCase, error) {
 	return cases[:min(count, len(cases))], nil
 }
 
-func generateFuzzyPatterns(count int) ([]EvaluationCase, error) {
+func generateFuzzyPatterns(count int) ([]eval.EvaluationCase, error) {
 	commands := []string{
 		"git status", "git commit -m", "git push origin", "git pull origin",
 		"docker run", "docker ps", "docker build", "docker stop",
@@ -235,7 +241,7 @@ func generateFuzzyPatterns(count int) ([]EvaluationCase, error) {
 		"python3 -m", "pip install", "go mod tidy", "go build",
 	}
 
-	var cases []EvaluationCase
+	var cases []eval.EvaluationCase
 
 	for _, cmd := range commands {
 		if len(cases) >= count {
@@ -258,7 +264,7 @@ func generateFuzzyPatterns(count int) ([]EvaluationCase, error) {
 				continue
 			}
 
-			cases = append(cases, EvaluationCase{
+			cases = append(cases, eval.EvaluationCase{
 				Input:    pattern,
 				Expected: cmd,
 				Category: getCommandCategory(cmd),
@@ -269,7 +275,7 @@ func generateFuzzyPatterns(count int) ([]EvaluationCase, error) {
 	return cases[:min(count, len(cases))], nil
 }
 
-func generateFromGitHubExamples(count int) ([]EvaluationCase, error) {
+func generateFromGitHubExamples(count int) ([]eval.EvaluationCase, error) {
 	// Simulate popular GitHub repository commands
 	githubCommands := []string{
 		"make build", "make test", "make install", "make clean",
@@ -282,7 +288,7 @@ func generateFromGitHubExamples(count int) ([]EvaluationCase, error) {
 		"helm install", "helm upgrade", "helm list",
 	}
 
-	var cases []EvaluationCase
+	var cases []eval.EvaluationCase
 
 	for _, cmd := range githubCommands {
 		if len(cases) >= count {
@@ -295,7 +301,7 @@ func generateFromGitHubExamples(count int) ([]EvaluationCase, error) {
 				break
 			}
 
-			cases = append(cases, EvaluationCase{
+			cases = append(cases, eval.EvaluationCase{
 				Input:    pattern,
 				Expected: cmd,
 				Category: getCommandCategory(cmd),
@@ -448,7 +454,7 @@ func getPopularCommands() []PopularCommand {
 	}
 }
 
-func writeBalancedCSV(cases []EvaluationCase, filename string) error {
+func writeBalancedCSV(cases []eval.EvaluationCase, filename string) error {
 	file, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -474,7 +480,7 @@ func writeBalancedCSV(cases []EvaluationCase, filename string) error {
 	return nil
 }
 
-func printDatasetSummary(cases []EvaluationCase) {
+func printDatasetSummary(cases []eval.EvaluationCase) {
 	fmt.Println("\n📊 DATASET SUMMARY")
 	fmt.Println("═══════════════════════════════════════")
 
@@ -507,4 +513,98 @@ func expandPath(path string) string {
 		return strings.Replace(path, "~", home, 1)
 	}
 	return path
+}
+
+func getCommandCategory(cmd string) string {
+	parts := strings.Fields(cmd)
+	if len(parts) == 0 {
+		return "unknown"
+	}
+
+	baseCmd := parts[0]
+
+	// Common categories
+	categories := map[string]string{
+		"git":    "git",
+		"docker": "docker",
+		"npm":    "npm",
+		"yarn":   "yarn",
+		"go":     "go",
+		"python": "python",
+		"pip":    "python",
+		"curl":   "network",
+		"wget":   "network",
+		"ssh":    "network",
+		"ls":     "filesystem",
+		"cd":     "filesystem",
+		"mkdir":  "filesystem",
+		"rm":     "filesystem",
+		"cp":     "filesystem",
+		"mv":     "filesystem",
+	}
+
+	if category, exists := categories[baseCmd]; exists {
+		return category
+	}
+
+	return "other"
+}
+
+func parseHistoryFile(filePath string) ([]string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var commands []string
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Handle zsh extended history format: : 1234567890:0;command
+		if strings.Contains(line, ";") && strings.HasPrefix(line, ":") {
+			parts := strings.SplitN(line, ";", 2)
+			if len(parts) == 2 {
+				line = parts[1]
+			}
+		}
+
+		// Clean up the command
+		line = strings.TrimSpace(line)
+		if line != "" && len(line) > 2 {
+			commands = append(commands, line)
+		}
+	}
+
+	return commands, scanner.Err()
+}
+
+func getFrequentCommands(commands []string, minFreq int) []CommandFreq {
+	freq := make(map[string]int)
+
+	for _, cmd := range commands {
+		freq[cmd]++
+	}
+
+	var frequent []CommandFreq
+	for cmd, count := range freq {
+		if count >= minFreq {
+			frequent = append(frequent, CommandFreq{
+				Command: cmd,
+				Count:   count,
+			})
+		}
+	}
+
+	// Sort by frequency (descending)
+	sort.Slice(frequent, func(i, j int) bool {
+		return frequent[i].Count > frequent[j].Count
+	})
+
+	return frequent
 }

@@ -1,4 +1,4 @@
-package cmd
+package eval
 
 import (
 	"database/sql"
@@ -47,7 +47,7 @@ func NewBatchEvalCmd(db *sql.DB) *cobra.Command {
 
 func RunBatchEvaluation(db *sql.DB, filePath string, modelNames []string) error {
 	// Load test cases once
-	cases, err := loadEvaluationCases(filePath)
+	cases, err := LoadEvaluationCases(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to load evaluation cases: %w", err)
 	}
@@ -66,7 +66,9 @@ func RunBatchEvaluation(db *sql.DB, filePath string, modelNames []string) error 
 
 		pmodel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, modelName)
 
-		model.DrainAndLogEvents(events)
+		waitForHeavy := modelName == "llm" || modelName == "embedding"
+
+		model.DrainAndLogEvents(events, waitForHeavy)
 
 		if pmodel == nil {
 			fmt.Printf("❌ Failed to create model: %s\n", modelName)

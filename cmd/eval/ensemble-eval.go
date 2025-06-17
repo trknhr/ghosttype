@@ -1,8 +1,13 @@
-package cmd
+package eval
 
 import (
+	"bufio"
 	"database/sql"
+	"encoding/csv"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -14,6 +19,26 @@ import (
 	"github.com/trknhr/ghosttype/internal/ollama"
 	"github.com/trknhr/ghosttype/internal/store"
 )
+
+type EvaluationCase struct {
+	Input    string `json:"input"`
+	Expected string `json:"expected"`
+	Category string `json:"category,omitempty"`
+	Source   string `json:"source,omitempty"` // Optional source field for additional context
+}
+
+type EvaluationResult struct {
+	Total       int
+	Top1Correct int
+	Top3Correct int
+	ByCategory  map[string]CategoryResult
+}
+
+type CategoryResult struct {
+	Total       int
+	Top1Correct int
+	Top3Correct int
+}
 
 type EnsembleEvaluationResult struct {
 	Total        int
@@ -86,7 +111,7 @@ a realistic assessment of the actual user experience.`,
 
 func RunEnsembleEvaluation(db *sql.DB, filePath string, modelNames []string, includeIndividual bool, maxSuggestions int) error {
 	// Load test cases
-	cases, err := loadEvaluationCases(filePath)
+	cases, err := LoadEvaluationCases(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to load evaluation cases: %w", err)
 	}
@@ -106,8 +131,7 @@ func RunEnsembleEvaluation(db *sql.DB, filePath string, modelNames []string, inc
 	hitoryLoader := history.NewHistoryLoaderAuto()
 	ollamaClient := ollama.NewHTTPClient("llama3.2:1b", "nomic-embed-text")
 	ensembleModel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, filterModels)
-
-	model.DrainAndLogEvents(events)
+	model.DrainAndLogEvents(events, true)
 	if ensembleModel == nil {
 		return fmt.Errorf("failed to create ensemble model")
 	}
@@ -388,4 +412,106 @@ func printTopSuggestions(suggestions []entity.Suggestion, limit int) {
 	for i := 0; i < limit; i++ {
 		fmt.Printf("    [%d] %s (%.3f)\n", i+1, suggestions[i].Text, suggestions[i].Score)
 	}
+}
+
+func LoadEvaluationCases(filePath string) ([]EvaluationCase, error) {
+	ext := strings.ToLower(filepath.Ext(filePath))
+
+	switch ext {
+	case ".csv":
+		return loadFromCSV(filePath)
+	case ".jsonl":
+		return loadFromJSONL(filePath)
+	default:
+		return nil, fmt.Errorf("unsupported file format: %s (supported: .csv, .jsonl)", ext)
+	}
+}
+
+func loadFromCSV(filePath string) ([]EvaluationCase, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(records) == 0 {
+		return nil, fmt.Errorf("empty CSV file")
+	}
+
+	// Find column indices
+	header := records[0]
+	inputIdx, expectedIdx, categoryIdx := -1, -1, -1
+
+	for i, col := range header {
+		switch strings.ToLower(strings.TrimSpace(col)) {
+		case "input":
+			inputIdx = i
+		case "expected":
+			expectedIdx = i
+		case "category":
+			categoryIdx = i
+		}
+	}
+
+	if inputIdx == -1 || expectedIdx == -1 {
+		return nil, fmt.Errorf("CSV must contain 'input' and 'expected' columns")
+	}
+
+	var cases []EvaluationCase
+	for i, record := range records[1:] { // Skip header
+		if len(record) <= inputIdx || len(record) <= expectedIdx {
+			fmt.Fprintf(os.Stderr, "⚠️  Skipping malformed row %d\n", i+2)
+			continue
+		}
+
+		input := strings.TrimSpace(record[inputIdx])
+		expected := strings.TrimSpace(record[expectedIdx])
+
+		if input == "" || expected == "" {
+			continue
+		}
+
+		category := "unknown"
+		if categoryIdx != -1 && len(record) > categoryIdx {
+			if cat := strings.TrimSpace(record[categoryIdx]); cat != "" {
+				category = cat
+			}
+		}
+
+		cases = append(cases, EvaluationCase{
+			Input:    input,
+			Expected: expected,
+			Category: category,
+		})
+	}
+
+	return cases, nil
+}
+
+func loadFromJSONL(filePath string) ([]EvaluationCase, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var cases []EvaluationCase
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		var c EvaluationCase
+		if err := json.Unmarshal(scanner.Bytes(), &c); err != nil {
+			fmt.Fprintf(os.Stderr, "⚠️  JSON decode error: %v\n", err)
+			continue
+		}
+		cases = append(cases, c)
+	}
+
+	return cases, scanner.Err()
 }

@@ -7,7 +7,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
-	"github.com/trknhr/ghosttype/internal"
+	"github.com/trknhr/ghosttype/cmd/benchmark"
+	"github.com/trknhr/ghosttype/cmd/eval"
+	"github.com/trknhr/ghosttype/cmd/generate"
 	"github.com/trknhr/ghosttype/internal/history"
 	"github.com/trknhr/ghosttype/internal/logger"
 	"github.com/trknhr/ghosttype/internal/store"
@@ -19,7 +21,6 @@ func NewRootCmd(db *sql.DB, historyStore store.HistoryStore, historyLoader histo
 	var filterModels string
 	var quickExit bool
 
-	go internal.SyncAliasesAsync(db)
 	cmd := &cobra.Command{
 		Use:   "ghosttype",
 		Short: "Launch TUI for command suggestions",
@@ -60,23 +61,26 @@ func NewRootCmd(db *sql.DB, historyStore store.HistoryStore, historyLoader histo
 	cmd.Flags().StringVar(&filterModels, "filter-models", "", "[dev] comma-separated model list to use (markov,freq,llm,alias,context)")
 	cmd.Flags().BoolVar(&quickExit, "quick-exit", false, "Start and immediately exit (for benchmarking)")
 
+	cmd.AddCommand(eval.NewBatchEvalCmd(db))
+	cmd.AddCommand(eval.NewEnsembleEvalCmd(db))
+	cmd.AddCommand(generate.GenerateBalancedCmd)
+	cmd.AddCommand(benchmark.NewBenchmarkCmd(db))
+	cmd.AddCommand(benchmark.NewProfileCmd(db))
+
 	return cmd
 }
 
 func Execute(db *sql.DB) error {
 
 	historyStore := store.NewSQLHistoryStore(db)
-	hitoryLoader := history.NewHistoryLoaderAuto()
-	worker.LaunchWorker(historyStore, hitoryLoader)
+	historyLoader := history.NewHistoryLoaderAuto()
 
-	cmd := NewRootCmd(db, historyStore, hitoryLoader)
-	cmd.AddCommand(NewEvalCmd(db))
+	workers := []worker.SyncWorker{
+		worker.NewAliasSyncWorker(db),
+		worker.NewHistorySyncWorker(historyStore, historyLoader),
+	}
+	worker.LaunchSyncWorkers(workers...)
 
-	cmd.AddCommand(generateCmd)
-	cmd.AddCommand(NewBatchEvalCmd(db))
-	cmd.AddCommand(NewEnsembleEvalCmd(db))
-	cmd.AddCommand(NewBenchmarkCmd(db))
-	cmd.AddCommand(NewProfileCmd(db))
-
+	cmd := NewRootCmd(db, historyStore, historyLoader)
 	return cmd.Execute()
 }

@@ -1,4 +1,4 @@
-package cmd
+package benchmark
 
 import (
 	"bufio"
@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/trknhr/ghosttype/cmd/eval"
 	"github.com/trknhr/ghosttype/internal/history"
 	"github.com/trknhr/ghosttype/internal/model"
 	"github.com/trknhr/ghosttype/internal/ollama"
@@ -22,7 +23,7 @@ type BenchmarkTool struct {
 	Name        string
 	Version     string
 	Available   bool
-	TestFunc    func([]EvaluationCase, string) (*BenchmarkResult, error)
+	TestFunc    func([]eval.EvaluationCase, string) (*BenchmarkResult, error)
 	Description string
 }
 
@@ -97,7 +98,7 @@ func RunBenchmarkComparison(db *sql.DB, filePath string, toolNames []string, his
 	fmt.Printf("═══════════════════════════════════════════════════════════\n")
 
 	// Load test cases
-	cases, err := loadEvaluationCases(filePath)
+	cases, err := eval.LoadEvaluationCases(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to load evaluation cases: %w", err)
 	}
@@ -184,7 +185,7 @@ func setupBenchmarkTools(db *sql.DB, historyFile string) map[string]*BenchmarkTo
 	tools["ghosttype"] = &BenchmarkTool{
 		Name:      "ghosttype",
 		Available: true,
-		TestFunc: func(cases []EvaluationCase, _ string) (*BenchmarkResult, error) {
+		TestFunc: func(cases []eval.EvaluationCase, _ string) (*BenchmarkResult, error) {
 			return benchmarkGhosttype(db, cases)
 		},
 		Description: "AI-powered shell command completion",
@@ -195,7 +196,7 @@ func setupBenchmarkTools(db *sql.DB, historyFile string) map[string]*BenchmarkTo
 		tools["fzf"] = &BenchmarkTool{
 			Name:      "fzf",
 			Available: true,
-			TestFunc: func(cases []EvaluationCase, histFile string) (*BenchmarkResult, error) {
+			TestFunc: func(cases []eval.EvaluationCase, histFile string) (*BenchmarkResult, error) {
 				return benchmarkFzf(cases, histFile, fzfPath)
 			},
 			Description: "Command-line fuzzy finder",
@@ -210,7 +211,7 @@ func setupBenchmarkTools(db *sql.DB, historyFile string) map[string]*BenchmarkTo
 		tools["zoxide"] = &BenchmarkTool{
 			Name:      "zoxide",
 			Available: true,
-			TestFunc: func(cases []EvaluationCase, _ string) (*BenchmarkResult, error) {
+			TestFunc: func(cases []eval.EvaluationCase, _ string) (*BenchmarkResult, error) {
 				return benchmarkZoxide(cases, zoxidePath)
 			},
 			Description: "Smarter cd command",
@@ -222,7 +223,7 @@ func setupBenchmarkTools(db *sql.DB, historyFile string) map[string]*BenchmarkTo
 		tools["mcfly"] = &BenchmarkTool{
 			Name:      "mcfly",
 			Available: true,
-			TestFunc: func(cases []EvaluationCase, _ string) (*BenchmarkResult, error) {
+			TestFunc: func(cases []eval.EvaluationCase, _ string) (*BenchmarkResult, error) {
 				return benchmarkMcfly(cases, mcflyPath)
 			},
 			Description: "Neural network history search",
@@ -234,7 +235,7 @@ func setupBenchmarkTools(db *sql.DB, historyFile string) map[string]*BenchmarkTo
 		tools["atuin"] = &BenchmarkTool{
 			Name:      "atuin",
 			Available: true,
-			TestFunc: func(cases []EvaluationCase, _ string) (*BenchmarkResult, error) {
+			TestFunc: func(cases []eval.EvaluationCase, _ string) (*BenchmarkResult, error) {
 				return benchmarkAtuin(cases, atuinPath)
 			},
 			Description: "Magical shell history",
@@ -244,14 +245,14 @@ func setupBenchmarkTools(db *sql.DB, historyFile string) map[string]*BenchmarkTo
 	return tools
 }
 
-func benchmarkGhosttype(db *sql.DB, cases []EvaluationCase) (*BenchmarkResult, error) {
+func benchmarkGhosttype(db *sql.DB, cases []eval.EvaluationCase) (*BenchmarkResult, error) {
 	historyStore := store.NewSQLHistoryStore(db)
 	hitoryLoader := history.NewHistoryLoaderAuto()
 	ollamaClient := ollama.NewHTTPClient("llama3.2:1b", "nomic-embed-text")
 
 	pmodel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, "")
 
-	model.DrainAndLogEvents(events)
+	model.DrainAndLogEvents(events, true)
 	if pmodel == nil {
 		return nil, fmt.Errorf("failed to create ghosttype model")
 	}
@@ -300,7 +301,7 @@ func benchmarkGhosttype(db *sql.DB, cases []EvaluationCase) (*BenchmarkResult, e
 	return result, nil
 }
 
-func benchmarkFzf(cases []EvaluationCase, historyFile, fzfPath string) (*BenchmarkResult, error) {
+func benchmarkFzf(cases []eval.EvaluationCase, historyFile, fzfPath string) (*BenchmarkResult, error) {
 	result := &BenchmarkResult{
 		TotalCases: len(cases),
 		Latencies:  make([]time.Duration, 0, len(cases)),
@@ -371,7 +372,7 @@ func benchmarkFzf(cases []EvaluationCase, historyFile, fzfPath string) (*Benchma
 	return result, nil
 }
 
-func benchmarkZoxide(cases []EvaluationCase, zoxidePath string) (*BenchmarkResult, error) {
+func benchmarkZoxide(cases []eval.EvaluationCase, zoxidePath string) (*BenchmarkResult, error) {
 	result := &BenchmarkResult{
 		TotalCases: len(cases),
 		Latencies:  make([]time.Duration, 0, len(cases)),
@@ -381,7 +382,7 @@ func benchmarkZoxide(cases []EvaluationCase, zoxidePath string) (*BenchmarkResul
 	cdCases := filterCdCommands(cases)
 	if len(cdCases) == 0 {
 		// Create some synthetic cd cases
-		cdCases = []EvaluationCase{
+		cdCases = []eval.EvaluationCase{
 			{Input: "ho", Expected: "cd $HOME", Category: "filesystem"},
 			{Input: "tmp", Expected: "cd /tmp", Category: "filesystem"},
 		}
@@ -435,7 +436,7 @@ func benchmarkZoxide(cases []EvaluationCase, zoxidePath string) (*BenchmarkResul
 	return result, nil
 }
 
-func benchmarkMcfly(cases []EvaluationCase, mcflyPath string) (*BenchmarkResult, error) {
+func benchmarkMcfly(cases []eval.EvaluationCase, mcflyPath string) (*BenchmarkResult, error) {
 	// McFly doesn't have a direct query mode, so this is a simplified benchmark
 	result := &BenchmarkResult{
 		TotalCases:      len(cases),
@@ -455,7 +456,7 @@ func benchmarkMcfly(cases []EvaluationCase, mcflyPath string) (*BenchmarkResult,
 	return result, nil
 }
 
-func benchmarkAtuin(cases []EvaluationCase, atuinPath string) (*BenchmarkResult, error) {
+func benchmarkAtuin(cases []eval.EvaluationCase, atuinPath string) (*BenchmarkResult, error) {
 	result := &BenchmarkResult{
 		TotalCases: len(cases),
 		Latencies:  make([]time.Duration, 0, len(cases)),
@@ -576,8 +577,8 @@ func getFzfVersion(fzfPath string) string {
 	return strings.TrimSpace(string(output))
 }
 
-func filterCdCommands(cases []EvaluationCase) []EvaluationCase {
-	var cdCases []EvaluationCase
+func filterCdCommands(cases []eval.EvaluationCase) []eval.EvaluationCase {
+	var cdCases []eval.EvaluationCase
 	for _, c := range cases {
 		if strings.HasPrefix(c.Expected, "cd ") || c.Category == "filesystem" {
 			cdCases = append(cdCases, c)
