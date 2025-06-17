@@ -8,11 +8,14 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	"github.com/trknhr/ghosttype/internal"
-	"github.com/trknhr/ghosttype/internal/logger.go"
-	"github.com/trknhr/ghosttype/tui"
+	"github.com/trknhr/ghosttype/internal/history"
+	"github.com/trknhr/ghosttype/internal/logger"
+	"github.com/trknhr/ghosttype/internal/store"
+	"github.com/trknhr/ghosttype/internal/tui"
+	"github.com/trknhr/ghosttype/internal/worker"
 )
 
-func NewRootCmd(db *sql.DB) *cobra.Command {
+func NewRootCmd(db *sql.DB, historyStore store.HistoryStore, historyLoader history.HistoryLoader) *cobra.Command {
 	var filterModels string
 	var quickExit bool
 
@@ -26,7 +29,8 @@ func NewRootCmd(db *sql.DB) *cobra.Command {
 			if len(args) > 0 {
 				initial = args[0]
 			}
-			model, err := tui.NewTuiModel(db, initial, filterModels)
+
+			model, err := tui.NewTuiModel(db, initial, filterModels, historyStore, historyLoader)
 			if err != nil {
 				return err
 			}
@@ -37,7 +41,7 @@ func NewRootCmd(db *sql.DB) *cobra.Command {
 			defer tty.Close()
 
 			if quickExit {
-				fmt.Fprintf(os.Stderr, "Quick exit mode: TUI initialization skipped\n")
+				logger.Info("Quick exit mode: TUI initialization skipped\n")
 
 				return nil
 			}
@@ -60,7 +64,12 @@ func NewRootCmd(db *sql.DB) *cobra.Command {
 }
 
 func Execute(db *sql.DB) error {
-	cmd := NewRootCmd(db)
+
+	historyStore := store.NewSQLHistoryStore(db)
+	hitoryLoader := history.NewHistoryLoaderAuto()
+	worker.LaunchWorker(historyStore, hitoryLoader)
+
+	cmd := NewRootCmd(db, historyStore, hitoryLoader)
 	cmd.AddCommand(NewEvalCmd(db))
 
 	cmd.AddCommand(generateCmd)

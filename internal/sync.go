@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/trknhr/ghosttype/internal/logger.go"
-	"github.com/trknhr/ghosttype/parser"
-	"github.com/trknhr/ghosttype/store"
+	"github.com/trknhr/ghosttype/internal/logger"
+	"github.com/trknhr/ghosttype/internal/parser"
+	"github.com/trknhr/ghosttype/internal/store"
 )
 
 func SyncAliasesAsync(db *sql.DB) {

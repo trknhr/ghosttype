@@ -12,8 +12,11 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/trknhr/ghosttype/internal"
-	"github.com/trknhr/ghosttype/model"
+	"github.com/trknhr/ghosttype/internal/history"
+	"github.com/trknhr/ghosttype/internal/model"
+	"github.com/trknhr/ghosttype/internal/model/entity"
+	"github.com/trknhr/ghosttype/internal/ollama"
+	"github.com/trknhr/ghosttype/internal/store"
 )
 
 var (
@@ -28,10 +31,7 @@ var (
 	profileVerbose    bool
 )
 
-// NOTE: このファイルにあった元の `profileCmd` の定義は `NewProfileCmd` 内に統合されました。
-
 func NewProfileCmd(db *sql.DB) *cobra.Command {
-	// メインの `profile` コマンドを定義
 	mainProfileCmd := &cobra.Command{
 		Use:   "profile",
 		Short: "Profile ghosttype performance",
@@ -158,8 +158,14 @@ func runCPUProfile(db *sql.DB) error {
 	defer f.Close()
 
 	// Create model
-	model := internal.GenerateModel(db, "")
-	if model == nil {
+	historyStore := store.NewSQLHistoryStore(db)
+	hitoryLoader := history.NewHistoryLoaderAuto()
+	ollamaClient := ollama.NewHTTPClient("llama3.2:1b", "nomic-embed-text")
+
+	pmodel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, "")
+
+	model.DrainAndLogEvents(events)
+	if pmodel == nil {
 		return fmt.Errorf("failed to create model")
 	}
 
@@ -172,7 +178,7 @@ func runCPUProfile(db *sql.DB) error {
 	// Warmup
 	fmt.Printf("🔥 Warming up...\n")
 	for i := 0; i < 5; i++ {
-		_, _ = model.Predict(profileInput)
+		_, _ = pmodel.Predict(profileInput)
 	}
 
 	// Profile actual predictions
@@ -180,7 +186,7 @@ func runCPUProfile(db *sql.DB) error {
 	start := time.Now()
 
 	for i := 0; i < profileIterations; i++ {
-		_, err := model.Predict(profileInput)
+		_, err := pmodel.Predict(profileInput)
 		if err != nil {
 			fmt.Printf("⚠️  Error in iteration %d: %v\n", i, err)
 		}
@@ -207,16 +213,20 @@ func runCPUProfile(db *sql.DB) error {
 func runMemoryProfile(db *sql.DB) error {
 	fmt.Printf("💾 Memory Profiling: %s (%d iterations)\n", profileInput, profileIterations)
 
-	// Create model
-	model := internal.GenerateModel(db, "")
-	if model == nil {
+	historyStore := store.NewSQLHistoryStore(db)
+	hitoryLoader := history.NewHistoryLoaderAuto()
+	ollamaClient := ollama.NewHTTPClient("llama3.2:1b", "nomic-embed-text")
+
+	pmodel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, "")
+	model.DrainAndLogEvents(events)
+	if pmodel == nil {
 		return fmt.Errorf("failed to create model")
 	}
 
 	// Warmup
 	fmt.Printf("🔥 Warming up...\n")
 	for i := 0; i < 5; i++ {
-		_, _ = model.Predict(profileInput)
+		_, _ = pmodel.Predict(profileInput)
 	}
 
 	// Force GC before profiling
@@ -227,7 +237,7 @@ func runMemoryProfile(db *sql.DB) error {
 	start := time.Now()
 
 	for i := 0; i < profileIterations; i++ {
-		_, err := model.Predict(profileInput)
+		_, err := pmodel.Predict(profileInput)
 		if err != nil {
 			fmt.Printf("⚠️  Error in iteration %d: %v\n", i, err)
 		}
@@ -284,10 +294,15 @@ func runEnsembleProfile(db *sql.DB) error {
 	var modelFilter string
 	if len(profileModels) > 0 {
 		modelFilter = strings.Join(profileModels, ",")
-	}
 
-	originalModel := internal.GenerateModel(db, modelFilter)
-	if originalModel == nil {
+	}
+	historyStore := store.NewSQLHistoryStore(db)
+	hitoryLoader := history.NewHistoryLoaderAuto()
+	ollamaClient := ollama.NewHTTPClient("llama3.2:1b", "nomic-embed-text")
+	pmodel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, modelFilter)
+
+	model.DrainAndLogEvents(events)
+	if pmodel == nil {
 		return fmt.Errorf("failed to create ensemble model")
 	}
 
@@ -301,7 +316,7 @@ func runEnsembleProfile(db *sql.DB) error {
 	// Profile ensemble predictions
 	fmt.Printf("🔥 Warming up...\n")
 	for i := 0; i < 3; i++ {
-		_, _ = originalModel.Predict("git st")
+		_, _ = pmodel.Predict("git st")
 	}
 
 	fmt.Printf("📊 Profiling ensemble on %d test cases...\n", len(cases))
@@ -312,7 +327,7 @@ func runEnsembleProfile(db *sql.DB) error {
 	defer pprof.StopCPUProfile()
 
 	// Create instrumented versions of the models for accurate timing
-	instrumentedModel := createInstrumentedEnsemble(originalModel)
+	instrumentedModel := createInstrumentedEnsemble(pmodel)
 
 	start := time.Now()
 	var totalLatency time.Duration
@@ -426,9 +441,13 @@ func runEnsembleProfile(db *sql.DB) error {
 func runQuickProfile(db *sql.DB) error {
 	fmt.Printf("⚡ Quick Performance Profile (%v)\n", profileDuration)
 
-	// Create model
-	model := internal.GenerateModel(db, "")
-	if model == nil {
+	historyStore := store.NewSQLHistoryStore(db)
+	hitoryLoader := history.NewHistoryLoaderAuto()
+	ollamaClient := ollama.NewHTTPClient("llama3.2:1b", "nomic-embed-text")
+	pmodel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, "")
+
+	model.DrainAndLogEvents(events)
+	if pmodel == nil {
 		return fmt.Errorf("failed to create model")
 	}
 
@@ -472,7 +491,7 @@ OuterLoop:
 		default:
 			for _, input := range testInputs {
 				predStart := time.Now()
-				_, err := model.Predict(input)
+				_, err := pmodel.Predict(input)
 				predLatency := time.Since(predStart)
 
 				if err == nil {
@@ -535,21 +554,26 @@ func runBlockingProfile(db *sql.DB) error {
 	}
 	defer f.Close()
 
-	model := internal.GenerateModel(db, "")
-	if model == nil {
+	historyStore := store.NewSQLHistoryStore(db)
+	hitoryLoader := history.NewHistoryLoaderAuto()
+	ollamaClient := ollama.NewHTTPClient("llama3.2:1b", "nomic-embed-text")
+	pmodel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, "")
+
+	model.DrainAndLogEvents(events)
+	if pmodel == nil {
 		return fmt.Errorf("failed to create model")
 	}
 
 	fmt.Printf("🔥 Warming up...\n")
 	for i := 0; i < 5; i++ {
-		_, _ = model.Predict(profileInput)
+		_, _ = pmodel.Predict(profileInput)
 	}
 
 	fmt.Printf("📊 Profiling %d predictions...\n", profileIterations)
 	start := time.Now()
 
 	for i := 0; i < profileIterations; i++ {
-		_, err := model.Predict(profileInput)
+		_, err := pmodel.Predict(profileInput)
 		if err != nil {
 			fmt.Printf("⚠️  Error in iteration %d: %v\n", i, err)
 		}
@@ -583,14 +607,19 @@ func runGoroutineProfile(db *sql.DB) error {
 	}
 	defer f.Close()
 
-	model := internal.GenerateModel(db, "")
-	if model == nil {
+	historyStore := store.NewSQLHistoryStore(db)
+	hitoryLoader := history.NewHistoryLoaderAuto()
+	ollamaClient := ollama.NewHTTPClient("llama3.2:1b", "nomic-embed-text")
+	pmodel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, "")
+	model.DrainAndLogEvents(events)
+
+	if pmodel == nil {
 		return fmt.Errorf("failed to create model")
 	}
 
 	fmt.Printf("🔥 Warming up...\n")
 	for i := 0; i < 5; i++ {
-		_, _ = model.Predict(profileInput)
+		_, _ = pmodel.Predict(profileInput)
 	}
 
 	fmt.Printf("📊 Profiling %d predictions...\n", profileIterations)
@@ -602,7 +631,7 @@ func runGoroutineProfile(db *sql.DB) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, _ = model.Predict(profileInput)
+			_, _ = pmodel.Predict(profileInput)
 		}()
 	}
 	wg.Wait()
@@ -675,7 +704,7 @@ func runAllProfileTypes(db *sql.DB) error {
 // NOTE: For accurate measurement, this requires instrumenting the actual
 // DB and network clients, for example by wrapping sql.DB and http.Client.
 type InstrumentedEnsemble struct {
-	model       model.SuggestModel
+	model       entity.SuggestModel
 	dbTime      time.Duration
 	networkTime time.Duration
 	mu          sync.Mutex
@@ -686,13 +715,13 @@ type ModelTimings struct {
 	NetworkTime time.Duration
 }
 
-func createInstrumentedEnsemble(originalModel model.SuggestModel) *InstrumentedEnsemble {
+func createInstrumentedEnsemble(originalModel entity.SuggestModel) *InstrumentedEnsemble {
 	return &InstrumentedEnsemble{
 		model: originalModel,
 	}
 }
 
-func (ie *InstrumentedEnsemble) Predict(input string) ([]model.Suggestion, error) {
+func (ie *InstrumentedEnsemble) Predict(input string) ([]entity.Suggestion, error) {
 	// For now, we'll use a simplified approach.
 	// In a real implementation, we'd need to instrument the actual model calls
 	// by wrapping the http.Client and sql.DB instances to time their operations.
@@ -738,27 +767,3 @@ func (ie *InstrumentedEnsemble) GetTimings() ModelTimings {
 		NetworkTime: ie.networkTime,
 	}
 }
-
-// --- Evaluation case definitions ---
-
-// type EvaluationCase struct {
-// 	Input    string `json:"input"`
-// 	Expected string `json:"expected"`
-// 	Category string `json:"category"`
-// }
-
-// func loadEvaluationCases(filePath string) ([]EvaluationCase, error) {
-// 	// This would use the same logic as in the evaluation commands
-// 	// For now, return a simple implementation for compilation.
-// 	return []EvaluationCase{
-// 		{Input: "git st", Expected: "git status", Category: "git"},
-// 		{Input: "docker r", Expected: "docker run", Category: "docker"},
-// 		{Input: "npm i", Expected: "npm install", Category: "npm"},
-// 	}, nil
-// }
-
-// type EvaluationCase struct {
-// 	Input    string `json:"input"`
-// 	Expected string `json:"expected"`
-// 	Category string `json:"category"`
-// }

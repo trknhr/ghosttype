@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 
 	"github.com/trknhr/ghosttype/cmd"
-	"github.com/trknhr/ghosttype/internal/logger.go"
-	"github.com/trknhr/ghosttype/store"
+	"github.com/trknhr/ghosttype/internal/logger"
+	"github.com/trknhr/ghosttype/internal/store"
 	_ "github.com/tursodatabase/go-libsql"
 )
 

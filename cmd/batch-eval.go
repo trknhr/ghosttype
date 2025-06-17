@@ -7,8 +7,11 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/trknhr/ghosttype/internal"
-	"github.com/trknhr/ghosttype/model"
+	"github.com/trknhr/ghosttype/internal/history"
+	"github.com/trknhr/ghosttype/internal/model"
+	"github.com/trknhr/ghosttype/internal/model/entity"
+	"github.com/trknhr/ghosttype/internal/ollama"
+	"github.com/trknhr/ghosttype/internal/store"
 )
 
 type ModelResult struct {
@@ -57,15 +60,21 @@ func RunBatchEvaluation(db *sql.DB, filePath string, modelNames []string) error 
 
 	for _, modelName := range modelNames {
 		fmt.Printf("\n🧪 Testing model: %s\n", modelName)
+		historyStore := store.NewSQLHistoryStore(db)
+		hitoryLoader := history.NewHistoryLoaderAuto()
+		ollamaClient := ollama.NewHTTPClient("llama3.2:1b", "nomic-embed-text")
 
-		model := internal.GenerateModel(db, modelName)
-		if model == nil {
+		pmodel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, modelName)
+
+		model.DrainAndLogEvents(events)
+
+		if pmodel == nil {
 			fmt.Printf("❌ Failed to create model: %s\n", modelName)
 			continue
 		}
 
 		start := time.Now()
-		result, err := runSingleModelEvaluation(model, cases)
+		result, err := runSingleModelEvaluation(pmodel, cases)
 		duration := time.Since(start)
 
 		if err != nil {
@@ -92,7 +101,7 @@ func RunBatchEvaluation(db *sql.DB, filePath string, modelNames []string) error 
 	return nil
 }
 
-func runSingleModelEvaluation(model model.SuggestModel, cases []EvaluationCase) (EvaluationResult, error) {
+func runSingleModelEvaluation(model entity.SuggestModel, cases []EvaluationCase) (EvaluationResult, error) {
 	result := EvaluationResult{
 		ByCategory: make(map[string]CategoryResult),
 	}

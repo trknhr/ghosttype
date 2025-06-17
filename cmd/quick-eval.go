@@ -6,7 +6,10 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/trknhr/ghosttype/internal"
+	"github.com/trknhr/ghosttype/internal/history"
+	"github.com/trknhr/ghosttype/internal/model"
+	"github.com/trknhr/ghosttype/internal/ollama"
+	"github.com/trknhr/ghosttype/internal/store"
 )
 
 func NewQuickEvalCmd(db *sql.DB) *cobra.Command {
@@ -55,7 +58,11 @@ func RunQuickEvaluation(db *sql.DB, filePath string, sampleSize int) error {
 	fmt.Printf("📊 Evaluating %d test cases...\n", len(cases))
 
 	// Create ensemble model
-	ensembleModel := internal.GenerateModel(db, "")
+	historyStore := store.NewSQLHistoryStore(db)
+	hitoryLoader := history.NewHistoryLoaderAuto()
+	ollamaClient := ollama.NewHTTPClient("llama3.2:1b", "nomic-embed-text")
+	ensembleModel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, "")
+	model.DrainAndLogEvents(events)
 	if ensembleModel == nil {
 		return fmt.Errorf("failed to create ensemble model")
 	}

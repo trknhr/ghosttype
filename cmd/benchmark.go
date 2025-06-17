@@ -12,7 +12,10 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/trknhr/ghosttype/internal"
+	"github.com/trknhr/ghosttype/internal/history"
+	"github.com/trknhr/ghosttype/internal/model"
+	"github.com/trknhr/ghosttype/internal/ollama"
+	"github.com/trknhr/ghosttype/internal/store"
 )
 
 type BenchmarkTool struct {
@@ -242,8 +245,14 @@ func setupBenchmarkTools(db *sql.DB, historyFile string) map[string]*BenchmarkTo
 }
 
 func benchmarkGhosttype(db *sql.DB, cases []EvaluationCase) (*BenchmarkResult, error) {
-	model := internal.GenerateModel(db, "")
-	if model == nil {
+	historyStore := store.NewSQLHistoryStore(db)
+	hitoryLoader := history.NewHistoryLoaderAuto()
+	ollamaClient := ollama.NewHTTPClient("llama3.2:1b", "nomic-embed-text")
+
+	pmodel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, "")
+
+	model.DrainAndLogEvents(events)
+	if pmodel == nil {
 		return nil, fmt.Errorf("failed to create ghosttype model")
 	}
 
@@ -254,7 +263,7 @@ func benchmarkGhosttype(db *sql.DB, cases []EvaluationCase) (*BenchmarkResult, e
 
 	for _, testCase := range cases {
 		start := time.Now()
-		suggestions, err := model.Predict(testCase.Input)
+		suggestions, err := pmodel.Predict(testCase.Input)
 		latency := time.Since(start)
 
 		result.Latencies = append(result.Latencies, latency)

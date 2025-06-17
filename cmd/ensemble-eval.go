@@ -8,8 +8,11 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/trknhr/ghosttype/internal"
-	"github.com/trknhr/ghosttype/model"
+	"github.com/trknhr/ghosttype/internal/history"
+	"github.com/trknhr/ghosttype/internal/model"
+	"github.com/trknhr/ghosttype/internal/model/entity"
+	"github.com/trknhr/ghosttype/internal/ollama"
+	"github.com/trknhr/ghosttype/internal/store"
 )
 
 type EnsembleEvaluationResult struct {
@@ -99,7 +102,12 @@ func RunEnsembleEvaluation(db *sql.DB, filePath string, modelNames []string, inc
 		filterModels = strings.Join(modelNames, ",")
 	}
 
-	ensembleModel := internal.GenerateModel(db, filterModels)
+	historyStore := store.NewSQLHistoryStore(db)
+	hitoryLoader := history.NewHistoryLoaderAuto()
+	ollamaClient := ollama.NewHTTPClient("llama3.2:1b", "nomic-embed-text")
+	ensembleModel, events, _ := model.GenerateModel(historyStore, hitoryLoader, ollamaClient, db, filterModels)
+
+	model.DrainAndLogEvents(events)
 	if ensembleModel == nil {
 		return fmt.Errorf("failed to create ensemble model")
 	}
@@ -199,7 +207,7 @@ func RunEnsembleEvaluation(db *sql.DB, filePath string, modelNames []string, inc
 	return nil
 }
 
-func findRankPosition(suggestions []model.Suggestion, expected string, maxSuggestions int) RankPosition {
+func findRankPosition(suggestions []entity.Suggestion, expected string, maxSuggestions int) RankPosition {
 	limit := min(maxSuggestions, len(suggestions))
 
 	for i := 0; i < limit; i++ {
@@ -375,16 +383,9 @@ func printRecommendations(result EnsembleEvaluationResult) {
 	}
 }
 
-func printTopSuggestions(suggestions []model.Suggestion, limit int) {
+func printTopSuggestions(suggestions []entity.Suggestion, limit int) {
 	limit = min(limit, len(suggestions))
 	for i := 0; i < limit; i++ {
 		fmt.Printf("    [%d] %s (%.3f)\n", i+1, suggestions[i].Text, suggestions[i].Score)
 	}
 }
-
-// func min(a, b int) int {
-// 	if a < b {
-// 		return a
-// 	}
-// 	return b
-// }
