@@ -16,7 +16,6 @@ func ExtractMakeTargets(path string) ([]string, error) {
 	var commands []string
 	lines := strings.Split(string(content), "\n")
 	for _, line := range lines {
-		// target: ...（ただし .PHONY や .SILENT を除く）
 		if strings.HasPrefix(line, "\t") || strings.HasPrefix(line, "#") {
 			continue
 		}

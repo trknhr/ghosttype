@@ -22,7 +22,7 @@ func TestDetectShell(t *testing.T) {
 		{"Empty", "", "unknown"},
 	}
 
-	original := os.Getenv("SHELL") // 元の値を保存
+	original := os.Getenv("SHELL")
 	defer os.Setenv("SHELL", original)
 
 	for _, tt := range tests {

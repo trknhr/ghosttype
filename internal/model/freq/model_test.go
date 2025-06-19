@@ -14,7 +14,6 @@ func setupFreqTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("failed to open db: %v", err)
 	}
 
-	// 通常のテーブルと FTS5 仮想テーブル
 	_, err = db.Exec(`
 		CREATE TABLE history (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,7 +32,6 @@ func setupFreqTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("failed to create history_fts table: %v", err)
 	}
 
-	// データを追加
 	commands := []struct {
 		cmd   string
 		count int

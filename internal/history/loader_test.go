@@ -7,9 +7,7 @@ import (
 	"github.com/golang/mock/gomock"
 )
 
-// Fileベースの実装のテスト
 func TestZshHistoryLoader_GetCurrentMtime(t *testing.T) {
-	// 一時ファイルを作成してmtimeを検証
 	tmpfile, err := os.CreateTemp("", "zsh_history_test")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
@@ -28,7 +26,6 @@ func TestZshHistoryLoader_GetCurrentMtime(t *testing.T) {
 	}
 }
 
-// モックを使ったテスト
 func TestHistoryLoader_Mock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -51,7 +48,6 @@ func TestHistoryLoader_Mock(t *testing.T) {
 		Key().
 		Return("zsh_history")
 
-	// テスト本体
 	cmds, err := mock.LoadTail(5)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)

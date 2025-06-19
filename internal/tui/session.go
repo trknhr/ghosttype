@@ -186,7 +186,6 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.isLoadingHeavy = true
 		}
 
-		// ここで mergeSuggestions が呼ばれています
 		mergedSuggestions := m.mergeSuggestions()
 		items := make([]list.Item, 0, len(mergedSuggestions))
 		for _, s := range mergedSuggestions {

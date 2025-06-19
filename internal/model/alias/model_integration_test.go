@@ -27,7 +27,6 @@ func setupInMemoryDB(t *testing.T) *sql.DB {
 		t.Fatalf("failed to create aliases table: %v", err)
 	}
 
-	// データ挿入
 	_, err = db.Exec(`
 		INSERT INTO aliases (name, cmd) VALUES 
 		('gs', 'git status'),

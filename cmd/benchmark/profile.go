@@ -59,7 +59,6 @@ This helps identify bottlenecks in prediction latency.`,
   ghosttype profile goroutine`,
 	}
 
-	// サブコマンドの定義
 	cpuCmd := &cobra.Command{
 		Use:   "cpu",
 		Short: "Profile CPU usage during predictions",
@@ -541,14 +540,12 @@ OuterLoop:
 	return nil
 }
 
-// --- 未定義だった関数のプレースホルダー ---
 func runBlockingProfile(db *sql.DB) error {
-	profileOutput = "blocking.prof" // ファイル名を固定
+	profileOutput = "blocking.prof"
 	fmt.Printf("⏳ Blocking Profiling: %s (%d iterations)\n", profileInput, profileIterations)
 
-	// ブロッキングプロファイリングを有効化 (1は全てのブロッキングイベントを記録)
 	runtime.SetBlockProfileRate(1)
-	defer runtime.SetBlockProfileRate(0) // プロファイル取得後にリセット
+	defer runtime.SetBlockProfileRate(0)
 
 	f, err := os.Create(profileOutput)
 	if err != nil {
@@ -583,7 +580,6 @@ func runBlockingProfile(db *sql.DB) error {
 
 	duration := time.Since(start)
 
-	// "block" プロファイルを取得してファイルに書き込む
 	if err := pprof.Lookup("block").WriteTo(f, 0); err != nil {
 		return fmt.Errorf("failed to write blocking profile: %w", err)
 	}
@@ -600,7 +596,7 @@ func runBlockingProfile(db *sql.DB) error {
 }
 
 func runGoroutineProfile(db *sql.DB) error {
-	profileOutput = "goroutine.prof" // ファイル名を固定
+	profileOutput = "goroutine.prof"
 	fmt.Printf("🏃 Goroutine Profiling: %s (%d iterations)\n", profileInput, profileIterations)
 
 	f, err := os.Create(profileOutput)
@@ -627,7 +623,6 @@ func runGoroutineProfile(db *sql.DB) error {
 	fmt.Printf("📊 Profiling %d predictions...\n", profileIterations)
 	start := time.Now()
 
-	// 複数のリクエストを並行して実行すると、より面白い結果が得られる場合がある
 	var wg sync.WaitGroup
 	for i := 0; i < profileIterations; i++ {
 		wg.Add(1)
@@ -640,7 +635,6 @@ func runGoroutineProfile(db *sql.DB) error {
 
 	duration := time.Since(start)
 
-	// "goroutine" プロファイルを取得してファイルに書き込む
 	if err := pprof.Lookup("goroutine").WriteTo(f, 0); err != nil {
 		return fmt.Errorf("failed to write goroutine profile: %w", err)
 	}
@@ -660,7 +654,6 @@ func runAllProfileTypes(db *sql.DB) error {
 	fmt.Println("🚀 Running all profile types...")
 	fmt.Println("======================================")
 
-	// 元のグローバル変数を保持
 	originalOutput := profileOutput
 
 	// 1. CPU Profile
@@ -691,7 +684,6 @@ func runAllProfileTypes(db *sql.DB) error {
 	}
 	fmt.Println("======================================")
 
-	// グローバル変数を元に戻す
 	profileOutput = originalOutput
 
 	fmt.Printf("🎉 All profiles completed successfully.\n")

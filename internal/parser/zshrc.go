@@ -27,9 +27,9 @@ func ExtractZshAliases(path string) ([]Alias, error) {
 		line := scanner.Text()
 		m := aliasPattern.FindStringSubmatch(line)
 		if len(m) == 3 {
-			cmd, err := strconv.Unquote(`"` + m[2] + `"`) // エスケープ解除
+			cmd, err := strconv.Unquote(`"` + m[2] + `"`)
 			if err != nil {
-				cmd = m[2] // 失敗したら元のまま
+				cmd = m[2]
 			}
 			aliases = append(aliases, Alias{
 				Name: m[1],

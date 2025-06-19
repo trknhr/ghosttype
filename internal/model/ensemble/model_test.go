@@ -16,7 +16,7 @@ type mockModel struct {
 }
 
 func (m *mockModel) Predict(input string) ([]entity.Suggestion, error) {
-	time.Sleep(m.delay) // 擬似的な処理時間
+	time.Sleep(m.delay)
 	return m.result, nil
 }
 
@@ -73,7 +73,6 @@ func TestProgressivePredict(t *testing.T) {
 		}
 	}
 
-	// light 結果の検証
 	if len(lightSuggestions) != 1 || lightSuggestions[0].Text != "light suggestion" {
 		t.Errorf("unexpected light result: %+v", light)
 	}

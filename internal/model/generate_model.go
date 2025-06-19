@@ -90,7 +90,7 @@ func GenerateModel(
 	// Create the ensemble model with light models
 	ensembleModel := ensemble.NewEnsemble(lightModels)
 
-	ch := make(chan ModelInitEvent, 2) // bufferはモデル数分
+	ch := make(chan ModelInitEvent, 2)
 
 	if enabled["embedding"] {
 		m := embedding.NewModel(embedding.NewEmbeddingStore(db), ollamaClient)
