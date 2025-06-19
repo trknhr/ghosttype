@@ -1,6 +1,4 @@
 export CGO_ENABLED := 1
-export MACOSX_DEPLOYMENT_TARGET := 15.2
-export CGO_LDFLAGS := -mmacosx-version-min=15.2
 
 APP_NAME := ghosttype
 SRC_DIRS := cmd history marcov
