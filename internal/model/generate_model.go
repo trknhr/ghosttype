@@ -110,7 +110,7 @@ func GenerateModel(
 		llmModel := llm.NewLLMRemoteModel(ollamaClient)
 
 		go func() {
-			_, err := llmModel.Predict("echo")
+			_, err := ollamaClient.Generate("echo")
 			if err != nil {
 				ch <- ModelInitEvent{Name: "llm", Status: ModelError, Err: err}
 			} else {

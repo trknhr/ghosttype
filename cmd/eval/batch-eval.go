@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/trknhr/ghosttype/internal/history"
 	"github.com/trknhr/ghosttype/internal/model"
-	"github.com/trknhr/ghosttype/internal/model/entity"
+	"github.com/trknhr/ghosttype/internal/model/ensemble"
 	"github.com/trknhr/ghosttype/internal/ollama"
 	"github.com/trknhr/ghosttype/internal/store"
 )
@@ -103,7 +103,7 @@ func RunBatchEvaluation(db *sql.DB, filePath string, modelNames []string) error 
 	return nil
 }
 
-func runSingleModelEvaluation(model entity.SuggestModel, cases []EvaluationCase) (EvaluationResult, error) {
+func runSingleModelEvaluation(model *ensemble.Ensemble, cases []EvaluationCase) (EvaluationResult, error) {
 	result := EvaluationResult{
 		ByCategory: make(map[string]CategoryResult),
 	}

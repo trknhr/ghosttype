@@ -108,10 +108,9 @@ type suggestionsMsg struct {
 	err         error
 }
 
-// Progressive enhancementを使用した新しい関数
 func fetchProgressiveSuggestionsCmd(engine *ensemble.Ensemble, prefix string) tea.Cmd {
 	return func() tea.Msg {
-		resultChan, err := engine.NextPredict(prefix)
+		resultChan, err := engine.ProgressivePredict(prefix)
 		if err != nil {
 			return suggestionsMsg{prefix, nil, false, err}
 		}

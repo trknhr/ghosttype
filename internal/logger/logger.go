@@ -2,45 +2,43 @@ package logger
 
 import (
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-type LogLevel int
-
-const (
-	DEBUG LogLevel = iota
-	INFO
-	WARN
-	ERROR
-	NONE
-)
-
 var (
-	level     = INFO
-	stdLogger = log.New(os.Stderr, "[ghosttype] ", log.LstdFlags)
+	logger *slog.Logger
+	level  = slog.LevelInfo
 )
 
 func Init(logfilePath string, levelStr string) error {
-	// ログレベル設定
 	switch strings.ToLower(levelStr) {
 	case "debug":
-		level = DEBUG
+		level = slog.LevelDebug
 	case "info":
-		level = INFO
+		level = slog.LevelInfo
 	case "warn":
-		level = WARN
+		level = slog.LevelWarn
 	case "error":
-		level = ERROR
+		level = slog.LevelError
 	case "none":
-		level = NONE
+		devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0644)
+		if err != nil {
+			return err
+		}
+		logger = slog.New(slog.NewTextHandler(devNull, nil))
+		return nil
 	default:
-		level = INFO
+		level = slog.LevelInfo
 	}
 
-	// outputFile
+	var opts = &slog.HandlerOptions{
+		Level: level,
+	}
+
+	var handler slog.Handler
 	if logfilePath != "" {
 		dir := filepath.Dir(logfilePath)
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -50,30 +48,32 @@ func Init(logfilePath string, levelStr string) error {
 		if err != nil {
 			return err
 		}
-		stdLogger.SetOutput(io.MultiWriter(os.Stderr, f)) // 複数出力可
+		handler = slog.NewTextHandler(io.MultiWriter(os.Stderr, f), opts)
 	} else {
-		stdLogger.SetOutput(os.Stderr)
+		handler = slog.NewTextHandler(os.Stderr, opts)
 	}
+
+	logger = slog.New(handler)
 	return nil
 }
 
 func Debug(msg string, args ...any) {
-	if level <= DEBUG {
-		stdLogger.Printf("[DEBUG] "+msg, args...)
+	if logger != nil {
+		logger.Debug(msg, args...)
 	}
 }
 func Info(msg string, args ...any) {
-	if level <= INFO {
-		stdLogger.Printf("[INFO] "+msg, args...)
+	if logger != nil {
+		logger.Info(msg, args...)
 	}
 }
 func Warn(msg string, args ...any) {
-	if level <= WARN {
-		stdLogger.Printf("[WARN] "+msg, args...)
+	if logger != nil {
+		logger.Warn(msg, args...)
 	}
 }
 func Error(msg string, args ...any) {
-	if level <= ERROR {
-		stdLogger.Printf("[ERROR] "+msg, args...)
+	if logger != nil {
+		logger.Error(msg, args...)
 	}
 }

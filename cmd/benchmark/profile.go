@@ -15,6 +15,7 @@ import (
 	"github.com/trknhr/ghosttype/cmd/eval"
 	"github.com/trknhr/ghosttype/internal/history"
 	"github.com/trknhr/ghosttype/internal/model"
+	"github.com/trknhr/ghosttype/internal/model/ensemble"
 	"github.com/trknhr/ghosttype/internal/model/entity"
 	"github.com/trknhr/ghosttype/internal/ollama"
 	"github.com/trknhr/ghosttype/internal/store"
@@ -705,7 +706,7 @@ func runAllProfileTypes(db *sql.DB) error {
 // NOTE: For accurate measurement, this requires instrumenting the actual
 // DB and network clients, for example by wrapping sql.DB and http.Client.
 type InstrumentedEnsemble struct {
-	model       entity.SuggestModel
+	model       *ensemble.Ensemble
 	dbTime      time.Duration
 	networkTime time.Duration
 	mu          sync.Mutex
@@ -716,7 +717,7 @@ type ModelTimings struct {
 	NetworkTime time.Duration
 }
 
-func createInstrumentedEnsemble(originalModel entity.SuggestModel) *InstrumentedEnsemble {
+func createInstrumentedEnsemble(originalModel *ensemble.Ensemble) *InstrumentedEnsemble {
 	return &InstrumentedEnsemble{
 		model: originalModel,
 	}

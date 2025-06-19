@@ -2,7 +2,6 @@ package ensemble
 
 import (
 	"context"
-	"errors"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -15,9 +14,9 @@ import (
 const SuggestionTimeout = 2 * time.Second
 
 type Ensemble struct {
-	LightModels atomic.Value // []model.SuggestModel
-	HeavyModels atomic.Value // []model.SuggestModel
-	Models      atomic.Value // []model.SuggestModel
+	LightModels atomic.Value
+	HeavyModels atomic.Value
+	Models      atomic.Value
 }
 
 func NewEnsemble(lightModels []entity.SuggestModel) *Ensemble {
@@ -42,18 +41,6 @@ func (e *Ensemble) AddHeavyModel(m entity.SuggestModel) {
 	copy(newAll, all)
 	newAll[len(all)] = m
 	e.Models.Store(newAll)
-}
-
-func (e *Ensemble) Learn(entries []string) error {
-	var allErr error
-	for _, m := range e.Models.Load().([]entity.SuggestModel) {
-		err := m.Learn(entries)
-		if err != nil {
-			allErr = errors.Join(allErr, err)
-		}
-	}
-
-	return allErr
 }
 
 func (e *Ensemble) Predict(input string) ([]entity.Suggestion, error) {
@@ -122,12 +109,8 @@ func (e *Ensemble) Predict(input string) ([]entity.Suggestion, error) {
 	return results, nil
 }
 
-func (m *Ensemble) Weight() float64 {
-	return 0
-}
-
 // Progressive enhancement prediction
-func (e *Ensemble) NextPredict(input string) (<-chan []entity.Suggestion, error) {
+func (e *Ensemble) ProgressivePredict(input string) (<-chan []entity.Suggestion, error) {
 	resultChan := make(chan []entity.Suggestion, 2)
 	ctx, cancel := context.WithTimeout(context.Background(), SuggestionTimeout)
 
