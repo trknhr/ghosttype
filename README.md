@@ -79,7 +79,13 @@ $ git ch▍    # Press Ctrl+P (zsh Integration)
 
 ## 🛠 Installation
 
-### 1. Install ghosttype
+### Option 1: Install Script (Recommended)
+
+```bash
+curl -sL https://raw.githubusercontent.com/trknhr/ghosttype/main/script/install.sh | bash
+```
+
+### Option 2: Go Install
 
 ```bash
 go install github.com/trknhr/ghosttype@latest
@@ -166,11 +172,7 @@ All models implement a unified `SuggestModel` interface and are combined via `en
 ```
 .
 ├── cmd/            # CLI (tui, suggest, root)
-├── history/        # Loaders for bash/zsh history
-├── model/          # All prediction models
 ├── internal/       # Logging, utils, alias sync
-├── ollama/         # LLM/embedding interface
-├── parser/         # RC and alias parsing
 ├── script/         # Shell helper scripts
 ├── main.go
 └── go.mod
