@@ -1,4 +1,5 @@
 use crate::core;
+use crate::model::SqlitePool;
 use anyhow::Result;
 use crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
@@ -8,6 +9,7 @@ use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
 use crossterm::ExecutableCommand;
+use log::warn;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};
@@ -21,7 +23,14 @@ use std::time::{Duration, Instant};
 
 pub fn run_tui(files: Vec<PathBuf>, top: usize, unique: bool) -> Result<()> {
     let corpus = core::load_history_lines(files, unique)?;
-    let mut app = core::App::new(corpus, top);
+    let pool = match SqlitePool::open_default() {
+        Ok(p) => Some(p),
+        Err(err) => {
+            warn!("failed to open sqlite history store: {err:?}");
+            None
+        }
+    };
+    let mut app = core::App::new(corpus, top, pool);
 
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
@@ -59,6 +68,7 @@ pub fn run_tui(files: Vec<PathBuf>, top: usize, unique: bool) -> Result<()> {
                 core::ExecMsg::Line(l) => app.output_lines.push(l),
                 core::ExecMsg::Done(code) => {
                     app.is_running = false;
+                    app.persist_last_run(code);
                     app.history.push(core::HistoryEntry {
                         cmd: app.last_run_cmd.clone().unwrap_or_default(),
                         exit_code: Some(code),
@@ -91,10 +101,6 @@ pub fn handle_key(
     match (code, mods) {
         (KeyCode::Char('c'), KeyModifiers::CONTROL) => return Ok(true),
         (KeyCode::Esc, _) => return Ok(true),
-
-        (KeyCode::Char('o'), _) => {
-            app.pinned_output = !app.pinned_output;
-        }
 
         (KeyCode::Up, _) => {
             app.selected = app.selected.saturating_sub(1);
