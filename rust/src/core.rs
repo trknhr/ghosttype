@@ -65,10 +65,17 @@ pub fn run_search(files: Vec<PathBuf>, query: &str, top: usize, unique: bool) ->
 // ---------------------
 // TUI model
 // ---------------------
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tab {
+    Main,
+    History,
+}
+
 #[derive(Clone)]
 pub struct HistoryEntry {
     pub cmd: String,
     pub exit_code: Option<i32>,
+    pub output_lines: Vec<String>,
 }
 
 pub struct App {
@@ -90,8 +97,14 @@ pub struct App {
     pub last_run_cmd: Option<String>,
 
     // view state
+    pub current_tab: Tab,
+    pub selected_history_index: usize,
     pub pinned_output: bool, // middle-left shows output instead of suggestions
     pub recent_runs_area: Option<Rect>, // clickable area cache
+    pub main_tab_area: Option<Rect>,
+    pub history_tab_area: Option<Rect>,
+    pub output_scroll: u16,        // scroll offset for main tab output
+    pub history_scroll: u16,       // scroll offset for history tab output
 
     // corpus
     pub corpus: Vec<String>,
@@ -102,18 +115,31 @@ pub struct App {
 
 impl App {
     pub fn new(corpus: Vec<String>, top: usize, db: Option<SqlitePool>) -> Self {
+        // Load recent history from database
+        let history = if let Some(ref pool) = db {
+            load_recent_history(pool, 100).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+
         Self {
             input: String::new(),
             cursor: 0,
             suggestions: Vec::new(),
             selected: 0,
             max_suggestions: top,
-            history: Vec::new(),
+            history,
             output_lines: Vec::new(),
             is_running: false,
             last_run_cmd: None,
+            current_tab: Tab::Main,
+            selected_history_index: 0,
             pinned_output: false,
             recent_runs_area: None,
+            main_tab_area: None,
+            history_tab_area: None,
+            output_scroll: 0,
+            history_scroll: 0,
             corpus,
             db,
             session_id: Self::generate_session_id(),
@@ -297,6 +323,38 @@ fn persist_history_entry(
     )?;
 
     Ok(())
+}
+
+fn load_recent_history(pool: &SqlitePool, limit: usize) -> Result<Vec<HistoryEntry>> {
+    pool.query_collect(
+        "SELECT command, output FROM history ORDER BY id DESC LIMIT ?1",
+        vec![Value::Integer(limit as i64)],
+        |row| {
+            let command: String = row.get(0)?;
+            let output_str: String = row.get(1).unwrap_or_default();
+
+            // Parse output to extract lines and exit code
+            let mut output_lines = Vec::new();
+            let mut exit_code = None;
+
+            for line in output_str.lines() {
+                if line.starts_with("(exit code: ") && line.ends_with(")") {
+                    // Extract exit code from the last line
+                    if let Some(code_str) = line.strip_prefix("(exit code: ").and_then(|s| s.strip_suffix(")")) {
+                        exit_code = code_str.parse::<i32>().ok();
+                    }
+                } else {
+                    output_lines.push(line.to_string());
+                }
+            }
+
+            Ok(HistoryEntry {
+                cmd: command,
+                exit_code,
+                output_lines,
+            })
+        },
+    )
 }
 
 fn hash_command(command: &str) -> String {
