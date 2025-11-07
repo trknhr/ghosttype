@@ -51,7 +51,7 @@ fn main() -> Result<()> {
     let _ = env_logger::Builder::from_env(Env::default().default_filter_or("info")).try_init();
     let cli = Cli::parse();
     match cli.cmd {
-        Some(Cmd::Tui { files, top, unique }) => tui::run_tui(files, top, unique),
+        Some(Cmd::Tui { files, top, unique }) => tui::run_tui_loop(files, top, unique),
         Some(Cmd::Search {
             files,
             query,

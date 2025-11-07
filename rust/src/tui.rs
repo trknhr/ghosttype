@@ -14,14 +14,19 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph};
 use ratatui::{Frame, Terminal};
 use std::io::Stdout;
 use std::path::PathBuf;
-use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
 
-pub fn run_tui(files: Vec<PathBuf>, top: usize, unique: bool) -> Result<()> {
+pub enum KeyResult {
+    Continue,
+    Quit,
+    RunCommand(String),
+}
+
+pub fn run_tui(files: Vec<PathBuf>, top: usize, unique: bool) -> Result<Option<String>> {
     let corpus = core::load_history_lines(files, unique)?;
     let pool = match SqlitePool::open_default() {
         Ok(p) => Some(p),
@@ -39,10 +44,9 @@ pub fn run_tui(files: Vec<PathBuf>, top: usize, unique: bool) -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let (tx, rx): (Sender<core::ExecMsg>, Receiver<core::ExecMsg>) = mpsc::channel();
-
     let tick_rate = Duration::from_millis(33);
     let mut last_tick = Instant::now();
+    let mut command_to_run: Option<String> = None;
 
     loop {
         terminal.draw(|f| ui(f, &mut app)).ok();
@@ -53,28 +57,21 @@ pub fn run_tui(files: Vec<PathBuf>, top: usize, unique: bool) -> Result<()> {
         if crossterm::event::poll(timeout)? {
             match event::read()? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
-                    should_quit = handle_key(key.code, key.modifiers, &mut app, &tx)?;
+                    let result = handle_key(key.code, key.modifiers, &mut app)?;
+                    match result {
+                        KeyResult::Quit => should_quit = true,
+                        KeyResult::RunCommand(cmd) => {
+                            command_to_run = Some(cmd);
+                            break;
+                        }
+                        KeyResult::Continue => {}
+                    }
                 }
                 Event::Mouse(mev) => {
                     handle_mouse(mev, &mut app);
                 }
                 Event::Resize(_, _) => {}
                 _ => {}
-            }
-        }
-
-        while let Ok(msg) = rx.try_recv() {
-            match msg {
-                core::ExecMsg::Line(l) => app.output_lines.push(l),
-                core::ExecMsg::Done(code) => {
-                    app.is_running = false;
-                    app.persist_last_run(code);
-                    app.history.push(core::HistoryEntry {
-                        cmd: app.last_run_cmd.clone().unwrap_or_default(),
-                        exit_code: Some(code),
-                        output_lines: app.output_lines.clone(),
-                    });
-                }
             }
         }
 
@@ -90,18 +87,17 @@ pub fn run_tui(files: Vec<PathBuf>, top: usize, unique: bool) -> Result<()> {
     disable_raw_mode()?;
     stdout.execute(LeaveAlternateScreen)?;
     stdout.execute(DisableMouseCapture)?;
-    Ok(())
+    Ok(command_to_run)
 }
 
 pub fn handle_key(
     code: KeyCode,
     mods: KeyModifiers,
     app: &mut core::App,
-    tx: &Sender<core::ExecMsg>,
-) -> Result<bool> {
+) -> Result<KeyResult> {
     match (code, mods) {
-        (KeyCode::Char('c'), KeyModifiers::CONTROL) => return Ok(true),
-        (KeyCode::Esc, _) => return Ok(true),
+        (KeyCode::Char('c'), KeyModifiers::CONTROL) => return Ok(KeyResult::Quit),
+        (KeyCode::Esc, _) => return Ok(KeyResult::Quit),
 
         // Tab switching: Ctrl+Tab to toggle between tabs
         (KeyCode::Tab, KeyModifiers::CONTROL) => {
@@ -117,7 +113,9 @@ pub fn handle_key(
                     app.selected = app.selected.saturating_sub(1);
                 }
                 core::Tab::History => {
-                    app.selected_history_index = app.selected_history_index.saturating_sub(1);
+                    if app.selected_history_index + 1 < app.history.len() {
+                        app.selected_history_index += 1;
+                    }
                     app.history_scroll = 0; // Reset scroll when changing selection
                 }
             }
@@ -130,9 +128,7 @@ pub fn handle_key(
                     }
                 }
                 core::Tab::History => {
-                    if app.selected_history_index + 1 < app.history.len() {
-                        app.selected_history_index += 1;
-                    }
+                    app.selected_history_index = app.selected_history_index.saturating_sub(1);
                     app.history_scroll = 0; // Reset scroll when changing selection
                 }
             }
@@ -197,6 +193,12 @@ pub fn handle_key(
         (KeyCode::End, _) if app.current_tab == core::Tab::Main => {
             app.cursor = app.input.len();
         }
+        (KeyCode::Char('a'), KeyModifiers::CONTROL) if app.current_tab == core::Tab::Main => {
+            app.cursor = app.input.len(); // Move cursor to end (simulates select all)
+        }
+        (KeyCode::Char('a'), KeyModifiers::SUPER) if app.current_tab == core::Tab::Main => {
+            app.cursor = app.input.len(); // Move cursor to end (simulates select all) - Mac Cmd+A
+        }
         (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT) if app.current_tab == core::Tab::Main => {
             app.input.insert(app.cursor, c);
             app.cursor += 1;
@@ -213,27 +215,20 @@ pub fn handle_key(
         }
 
         (KeyCode::Enter, _) if app.current_tab == core::Tab::Main => {
-            if app.is_running {
-                return Ok(false);
-            }
             let to_run = if let Some(sel) = app.suggestions.get(app.selected) {
                 sel.clone()
             } else {
                 app.input.clone()
             };
             if to_run.trim().is_empty() {
-                return Ok(false);
+                return Ok(KeyResult::Continue);
             }
-            app.output_lines.clear();
-            app.output_scroll = 0; // Reset scroll for new command
-            app.is_running = true;
-            app.last_run_cmd = Some(to_run.clone());
-            core::spawn_command(to_run, tx.clone());
+            return Ok(KeyResult::RunCommand(to_run));
         }
 
         _ => {}
     }
-    Ok(false)
+    Ok(KeyResult::Continue)
 }
 
 fn handle_mouse(mev: MouseEvent, app: &mut core::App) {
@@ -280,6 +275,9 @@ fn ui(f: &mut Frame, app: &mut core::App) {
 fn ui_main_tab(f: &mut Frame, app: &mut core::App) {
     let size = f.size();
 
+    // Clear the screen when rendering this tab
+    f.render_widget(Clear, size);
+
     let vchunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -302,6 +300,9 @@ fn ui_main_tab(f: &mut Frame, app: &mut core::App) {
 
 fn ui_history_tab(f: &mut Frame, app: &mut core::App) {
     let size = f.size();
+
+    // Clear the screen when rendering this tab
+    f.render_widget(Clear, size);
 
     let vchunks = Layout::default()
         .direction(Direction::Vertical)
@@ -418,17 +419,12 @@ fn draw_history_list(f: &mut Frame, area: Rect, app: &core::App) {
         .enumerate()
         .map(|(display_idx, h)| {
             let actual_idx = app.history.len().saturating_sub(1).saturating_sub(display_idx);
-            let label = if let Some(code) = h.exit_code {
-                format!("[{}] {}", code, h.cmd)
-            } else {
-                format!("[?] {}", h.cmd)
-            };
             let style = if actual_idx == app.selected_history_index {
                 Style::default().add_modifier(Modifier::BOLD | Modifier::REVERSED)
             } else {
                 Style::default()
             };
-            ListItem::new(Line::from(Span::styled(label, style)))
+            ListItem::new(Line::from(Span::styled(&h.cmd, style)))
         })
         .collect();
     let list = List::new(items).block(Block::default().title("Recent Commands").borders(Borders::ALL));
@@ -439,11 +435,7 @@ fn draw_history_output(f: &mut Frame, area: Rect, app: &core::App) {
     let (title, text) = if app.history.is_empty() {
         ("Output".to_string(), vec![Line::from("(no history yet)")])
     } else if let Some(entry) = app.history.get(app.selected_history_index) {
-        let title = format!(
-            "Output — {} [exit code: {}]",
-            entry.cmd,
-            entry.exit_code.map(|c| c.to_string()).unwrap_or_else(|| "?".to_string())
-        );
+        let title = format!("Output — {}", entry.cmd);
         let text = if entry.output_lines.is_empty() {
             vec![Line::from("(no output)")]
         } else {
@@ -482,4 +474,46 @@ fn draw_output(f: &mut Frame, area: Rect, app: &core::App) {
         .block(Block::default().title(title).borders(Borders::ALL))
         .scroll((app.output_scroll, 0));
     f.render_widget(p, area);
+}
+
+fn execute_in_terminal(command: &str) -> Result<()> {
+    use std::process::Command;
+
+    println!("\n$ {}\n", command);
+
+    Command::new("/bin/sh")
+        .arg("-lc")
+        .arg(command)
+        .status()?;
+
+    Ok(())
+}
+
+fn wait_for_enter() -> Result<()> {
+    use std::io::{self, Write};
+
+    print!("\nPress Enter to return to ghosttype...");
+    io::stdout().flush()?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+
+    Ok(())
+}
+
+pub fn run_tui_loop(files: Vec<PathBuf>, top: usize, unique: bool) -> Result<()> {
+    loop {
+        match run_tui(files.clone(), top, unique)? {
+            Some(command) => {
+                execute_in_terminal(&command)?;
+                wait_for_enter()?;
+                // Loop continues, TUI restarts
+            }
+            None => {
+                // User quit with Ctrl-C or ESC
+                break;
+            }
+        }
+    }
+    Ok(())
 }

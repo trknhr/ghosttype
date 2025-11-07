@@ -3,29 +3,19 @@ use anyhow::{bail, Context, Result};
 use directories::UserDirs;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
-use hex::encode;
 use libsql::Value;
-use log::warn;
 use once_cell::sync::Lazy;
 use ratatui::layout::Rect;
-use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{self, Command, Stdio};
-use std::sync::mpsc::Sender;
-use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::model::{
     AliasModel, EnsembleBuilder, FreqModel, PrefixModel, SqlitePool, SuggestModel, Suggestion,
 };
 
 static MATCHER: Lazy<SkimMatcherV2> = Lazy::new(SkimMatcherV2::default);
-const SOURCE_TUI: &str = "tui";
-const MAX_OUTPUT_LEN: usize = 16 * 1024;
-const TRUNC_SUFFIX: &str = "\n…[truncated]";
 /// Run the fuzzy search over one or more history files
 pub fn run_search(files: Vec<PathBuf>, query: &str, top: usize, unique: bool) -> Result<()> {
     if files.is_empty() {
@@ -74,7 +64,6 @@ pub enum Tab {
 #[derive(Clone)]
 pub struct HistoryEntry {
     pub cmd: String,
-    pub exit_code: Option<i32>,
     pub output_lines: Vec<String>,
 }
 
@@ -108,9 +97,6 @@ pub struct App {
 
     // corpus
     pub corpus: Vec<String>,
-
-    db: Option<SqlitePool>,
-    session_id: String,
 }
 
 impl App {
@@ -141,8 +127,6 @@ impl App {
             output_scroll: 0,
             history_scroll: 0,
             corpus,
-            db,
-            session_id: Self::generate_session_id(),
         }
     }
 
@@ -168,27 +152,6 @@ impl App {
         self.selected = self.selected.min(self.suggestions.len().saturating_sub(1));
     }
 
-    fn generate_session_id() -> String {
-        let ts = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis();
-        format!("tui-{}-{ts}", process::id())
-    }
-
-    pub(crate) fn persist_last_run(&self, exit_code: i32) {
-        let Some(pool) = self.db.as_ref() else {
-            return;
-        };
-        let Some(cmd) = self.last_run_cmd.as_ref() else {
-            return;
-        };
-        if let Err(err) =
-            persist_history_entry(pool, cmd, &self.output_lines, exit_code, &self.session_id)
-        {
-            warn!("failed to persist history entry: {err:?}");
-        }
-    }
 }
 
 pub fn load_history_lines(files: Vec<PathBuf>, unique: bool) -> Result<Vec<String>> {
@@ -222,44 +185,6 @@ pub fn load_history_lines(files: Vec<PathBuf>, unique: bool) -> Result<Vec<Strin
     Ok(lines)
 }
 
-pub enum ExecMsg {
-    Line(String),
-    Done(i32),
-}
-
-pub fn spawn_command(cmdline: String, tx: Sender<ExecMsg>) {
-    thread::spawn(move || {
-        let mut child = match Command::new("/bin/sh")
-            .arg("-lc")
-            .arg(&cmdline)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-        {
-            Ok(c) => c,
-            Err(e) => {
-                let _ = tx.send(ExecMsg::Line(format!("spawn error: {e}")));
-                let _ = tx.send(ExecMsg::Done(127));
-                return;
-            }
-        };
-
-        let stdout = child.stdout.take();
-        let stderr = child.stderr.take();
-
-        let tx1 = tx.clone();
-        let t_out = thread::spawn(move || stream_reader(stdout, tx1));
-        let tx2 = tx.clone();
-        let t_err = thread::spawn(move || stream_reader(stderr, tx2));
-
-        let status = child.wait().unwrap_or_default();
-        let _ = t_out.join();
-        let _ = t_err.join();
-        let code = status.code().unwrap_or(-1);
-        let _ = tx.send(ExecMsg::Done(code));
-    });
-}
-
 pub fn read_history_file(path: &Path) -> Result<Vec<String>> {
     let mut file = File::open(path).with_context(|| format!("opening {path:?}"))?;
     let mut buf = Vec::new();
@@ -270,61 +195,6 @@ pub fn read_history_file(path: &Path) -> Result<Vec<String>> {
         .collect())
 }
 
-fn stream_reader<R: Read + Send + 'static>(mut reader: Option<R>, tx: Sender<ExecMsg>) {
-    use std::io::{BufRead, BufReader};
-    if let Some(r) = reader.take() {
-        let br = BufReader::new(r);
-        for line in br.lines() {
-            match line {
-                Ok(l) => {
-                    let _ = tx.send(ExecMsg::Line(l));
-                }
-                Err(e) => {
-                    let _ = tx.send(ExecMsg::Line(format!("read error: {e}")));
-                    break;
-                }
-            }
-        }
-    }
-}
-
-fn persist_history_entry(
-    pool: &SqlitePool,
-    command: &str,
-    output_lines: &[String],
-    exit_code: i32,
-    session_id: &str,
-) -> Result<()> {
-    let trimmed = command.trim();
-    if trimmed.is_empty() {
-        return Ok(());
-    }
-
-    let hash = hash_command(trimmed);
-    let output = truncate_output(&format_output(output_lines, exit_code));
-
-    pool.execute(
-        r#"
-        INSERT INTO history (command, hash, count, source, session_id, output)
-        VALUES (?1, ?2, 1, ?3, ?4, ?5)
-        ON CONFLICT(hash) DO UPDATE SET
-            count = count + 1,
-            source = excluded.source,
-            session_id = excluded.session_id,
-            output = excluded.output;
-    "#,
-        vec![
-            Value::Text(trimmed.to_string()),
-            Value::Text(hash),
-            Value::Text(SOURCE_TUI.to_string()),
-            Value::Text(session_id.to_string()),
-            Value::Text(output),
-        ],
-    )?;
-
-    Ok(())
-}
-
 fn load_recent_history(pool: &SqlitePool, limit: usize) -> Result<Vec<HistoryEntry>> {
     pool.query_collect(
         "SELECT command, output FROM history ORDER BY id DESC LIMIT ?1",
@@ -333,157 +203,17 @@ fn load_recent_history(pool: &SqlitePool, limit: usize) -> Result<Vec<HistoryEnt
             let command: String = row.get(0)?;
             let output_str: String = row.get(1).unwrap_or_default();
 
-            // Parse output to extract lines and exit code
-            let mut output_lines = Vec::new();
-            let mut exit_code = None;
-
-            for line in output_str.lines() {
-                if line.starts_with("(exit code: ") && line.ends_with(")") {
-                    // Extract exit code from the last line
-                    if let Some(code_str) = line.strip_prefix("(exit code: ").and_then(|s| s.strip_suffix(")")) {
-                        exit_code = code_str.parse::<i32>().ok();
-                    }
-                } else {
-                    output_lines.push(line.to_string());
-                }
-            }
+            let output_lines: Vec<String> = output_str
+                .lines()
+                .map(|s| s.to_string())
+                .collect();
 
             Ok(HistoryEntry {
                 cmd: command,
-                exit_code,
                 output_lines,
             })
         },
     )
-}
-
-fn hash_command(command: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(command.as_bytes());
-    encode(hasher.finalize())
-}
-
-fn format_output(output_lines: &[String], exit_code: i32) -> String {
-    let mut buf = output_lines.join("\n");
-    if !buf.is_empty() {
-        buf.push('\n');
-    }
-    buf.push_str(&format!("(exit code: {exit_code})"));
-    buf
-}
-
-fn truncate_output(output: &str) -> String {
-    if output.len() <= MAX_OUTPUT_LEN {
-        return output.to_string();
-    }
-
-    let limit = MAX_OUTPUT_LEN.saturating_sub(TRUNC_SUFFIX.len());
-    if limit == 0 {
-        return TRUNC_SUFFIX.to_string();
-    }
-
-    let mut end = limit;
-    while end > 0 && !output.is_char_boundary(end) {
-        end -= 1;
-    }
-
-    if end == 0 {
-        return TRUNC_SUFFIX.to_string();
-    }
-
-    let mut truncated = output[..end].to_string();
-    truncated.push_str(TRUNC_SUFFIX);
-    truncated
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use libsql::Value;
-
-    fn setup_history_table(pool: &SqlitePool) {
-        pool.execute(
-            "CREATE TABLE history (
-                id INTEGER PRIMARY KEY,
-                command TEXT NOT NULL,
-                hash TEXT NOT NULL UNIQUE,
-                count INTEGER NOT NULL DEFAULT 1,
-                source TEXT,
-                session_id TEXT,
-                output TEXT
-            );",
-            Vec::<Value>::new(),
-        )
-        .unwrap();
-    }
-
-    #[test]
-    fn persist_history_inserts_and_updates() {
-        let pool = SqlitePool::open_memory().unwrap();
-        setup_history_table(&pool);
-
-        let lines = vec!["hello".to_string()];
-        persist_history_entry(&pool, "echo hello", &lines, 0, "session-1").unwrap();
-
-        let rows = pool
-            .query_collect(
-                "SELECT command, count, output FROM history",
-                Vec::<Value>::new(),
-                |row| {
-                    let command: String = row.get(0)?;
-                    let count: i64 = row.get(1)?;
-                    let output: String = row.get(2)?;
-                    Ok((command, count, output))
-                },
-            )
-            .unwrap();
-        assert_eq!(rows.len(), 1);
-        let (command, count, output) = &rows[0];
-        assert_eq!(command, "echo hello");
-        assert_eq!(*count, 1);
-        assert!(output.contains("hello"));
-        assert!(output.contains("(exit code: 0)"));
-
-        let lines2 = vec!["bye".to_string()];
-        persist_history_entry(&pool, "echo hello", &lines2, 1, "session-1").unwrap();
-
-        let rows = pool
-            .query_collect(
-                "SELECT count, output FROM history",
-                Vec::<Value>::new(),
-                |row| {
-                    let count: i64 = row.get(0)?;
-                    let output: String = row.get(1)?;
-                    Ok((count, output))
-                },
-            )
-            .unwrap();
-        let (count, output) = &rows[0];
-        assert_eq!(*count, 2);
-        assert!(output.contains("bye"));
-        assert!(output.contains("(exit code: 1)"));
-        assert!(!output.contains("hello"));
-    }
-
-    #[test]
-    fn truncate_output_limits_size() {
-        let pool = SqlitePool::open_memory().unwrap();
-        setup_history_table(&pool);
-
-        let long_line = "x".repeat(MAX_OUTPUT_LEN + 100);
-        let lines = vec![long_line];
-        persist_history_entry(&pool, "echo long", &lines, 0, "session-2").unwrap();
-
-        let rows = pool
-            .query_collect("SELECT output FROM history", Vec::<Value>::new(), |row| {
-                let output: String = row.get(0)?;
-                Ok(output)
-            })
-            .unwrap();
-        let output = rows.first().unwrap();
-        assert!(output.len() <= MAX_OUTPUT_LEN);
-        assert!(output.contains("…[truncated]"));
-    }
 }
 
 #[derive(Debug)]

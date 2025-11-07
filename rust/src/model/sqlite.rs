@@ -107,6 +107,7 @@ impl SqlitePool {
         Ok(out)
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn execute<I>(&self, sql: &str, params: I) -> Result<()>
     where
         I: IntoIterator<Item = Value>,
