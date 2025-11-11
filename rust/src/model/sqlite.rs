@@ -148,6 +148,14 @@ fn run_migrations(runtime: &Runtime, conn: &Connection) -> Result<()> {
             INSERT INTO history_fts(rowid, command) VALUES (new.id, new.command);
         END;"#,
         "CREATE INDEX IF NOT EXISTS idx_history_hash ON history(hash);",
+        r#"CREATE TABLE IF NOT EXISTS command_executions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            command     TEXT NOT NULL,
+            output      TEXT DEFAULT '',
+            session_id  TEXT DEFAULT '',
+            executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );"#,
+        "CREATE INDEX IF NOT EXISTS idx_executions_time ON command_executions(executed_at DESC);",
         r#"CREATE TABLE IF NOT EXISTS aliases (
             name TEXT PRIMARY KEY,
             cmd TEXT NOT NULL,

@@ -3,17 +3,21 @@ use anyhow::{bail, Context, Result};
 use directories::UserDirs;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
+use hex::encode;
 use libsql::Value;
 use once_cell::sync::Lazy;
 use ratatui::layout::Rect;
+use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use crate::model::{
-    AliasModel, EnsembleBuilder, FreqModel, PrefixModel, SqlitePool, SuggestModel, Suggestion,
+    AliasModel, EnsembleBuilder, FreqModel, LlmConfig, LlmModel, LlmWhich, PrefixModel,
+    SqlitePool, SuggestModel, Suggestion,
 };
+use crate::model::ensemble::Ensemble;
 
 static MATCHER: Lazy<SkimMatcherV2> = Lazy::new(SkimMatcherV2::default);
 /// Run the fuzzy search over one or more history files
@@ -95,12 +99,22 @@ pub struct App {
     pub output_scroll: u16,        // scroll offset for main tab output
     pub history_scroll: u16,       // scroll offset for history tab output
 
-    // corpus
+    // corpus (legacy fuzzy matching)
     pub corpus: Vec<String>,
+
+    // ensemble for multi-model suggestions
+    pub ensemble: Ensemble,
 }
 
 impl App {
-    pub fn new(corpus: Vec<String>, top: usize, db: Option<SqlitePool>) -> Self {
+    pub fn new(
+        corpus: Vec<String>,
+        top: usize,
+        db: Option<SqlitePool>,
+        enable_llm: bool,
+        llm_model: Option<PathBuf>,
+        llm_which: String,
+    ) -> Result<Self> {
         // Load recent history from database
         let history = if let Some(ref pool) = db {
             load_recent_history(pool, 100).unwrap_or_default()
@@ -108,7 +122,31 @@ impl App {
             Vec::new()
         };
 
-        Self {
+        // Build ensemble with all suggestion models
+        let mut builder = EnsembleBuilder::new().with_light_model(FuzzyHistoryModel::new(corpus.clone()));
+
+        // Add database-backed models if available
+        if let Some(ref pool) = db {
+            builder = builder
+                .with_light_model(PrefixModel::new(pool.clone()))
+                .with_light_model(FreqModel::new(pool.clone()))
+                .with_light_model(AliasModel::with_sql_store(pool.clone()));
+        }
+
+        // Add LLM model if enabled
+        if enable_llm {
+            let which = LlmWhich::from_str(&llm_which).unwrap_or(LlmWhich::W0_5b);
+            let llm_config = LlmConfig {
+                model_path: llm_model,
+                which,
+                ..Default::default()
+            };
+            builder = builder.with_light_model(LlmModel::new(llm_config));
+        }
+
+        let ensemble = builder.build();
+
+        Ok(Self {
             input: String::new(),
             cursor: 0,
             suggestions: Vec::new(),
@@ -127,7 +165,8 @@ impl App {
             output_scroll: 0,
             history_scroll: 0,
             corpus,
-        }
+            ensemble,
+        })
     }
 
     pub fn refresh_suggestions(&mut self) {
@@ -136,19 +175,38 @@ impl App {
             self.selected = 0;
             return;
         }
+
         let query = self.input.as_str();
-        let mut scored: Vec<(i64, String)> = Vec::new();
-        for line in self.corpus.iter() {
-            if let Some(score) = MATCHER.fuzzy_match(line, query) {
-                scored.push((score, line.clone()));
+
+        // Use ensemble for multi-model suggestions
+        match self.ensemble.predict(query) {
+            Ok(suggestions) => {
+                self.suggestions = suggestions
+                    .into_iter()
+                    .take(self.max_suggestions)
+                    .map(|s| s.text)
+                    .collect();
+            }
+            Err(e) => {
+                // Fallback to simple fuzzy matching if ensemble fails
+                use log::warn;
+                warn!("Ensemble prediction failed: {}. Falling back to fuzzy matching.", e);
+
+                let mut scored: Vec<(i64, String)> = Vec::new();
+                for line in self.corpus.iter() {
+                    if let Some(score) = MATCHER.fuzzy_match(line, query) {
+                        scored.push((score, line.clone()));
+                    }
+                }
+                scored.sort_by(|a, b| b.0.cmp(&a.0));
+                self.suggestions = scored
+                    .into_iter()
+                    .take(self.max_suggestions)
+                    .map(|(_, s)| s)
+                    .collect();
             }
         }
-        scored.sort_by(|a, b| b.0.cmp(&a.0));
-        self.suggestions = scored
-            .into_iter()
-            .take(self.max_suggestions)
-            .map(|(_, s)| s)
-            .collect();
+
         self.selected = self.selected.min(self.suggestions.len().saturating_sub(1));
     }
 
@@ -197,7 +255,7 @@ pub fn read_history_file(path: &Path) -> Result<Vec<String>> {
 
 fn load_recent_history(pool: &SqlitePool, limit: usize) -> Result<Vec<HistoryEntry>> {
     pool.query_collect(
-        "SELECT command, output FROM history ORDER BY id DESC LIMIT ?1",
+        "SELECT command, output FROM command_executions ORDER BY executed_at DESC LIMIT ?1",
         vec![Value::Integer(limit as i64)],
         |row| {
             let command: String = row.get(0)?;
@@ -214,6 +272,82 @@ fn load_recent_history(pool: &SqlitePool, limit: usize) -> Result<Vec<HistoryEnt
             })
         },
     )
+}
+
+fn hash_command(command: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(command.as_bytes());
+    encode(hasher.finalize())
+}
+
+pub fn persist_command_to_history(pool: &SqlitePool, command: &str, session_id: &str) -> Result<()> {
+    let trimmed = command.trim();
+    if trimmed.is_empty() {
+        return Ok(());
+    }
+
+    let hash = hash_command(trimmed);
+
+    // Update history table (for frequency counting)
+    pool.execute(
+        r#"
+        INSERT INTO history (command, hash, count, source, output)
+        VALUES (?1, ?2, 1, 'tui', '')
+        ON CONFLICT(hash) DO UPDATE SET
+            count = count + 1,
+            source = 'tui',
+            created_at = CURRENT_TIMESTAMP;
+    "#,
+        vec![
+            Value::Text(trimmed.to_string()),
+            Value::Text(hash),
+        ],
+    )?;
+
+    // Insert into command_executions (for full history with output)
+    pool.execute(
+        r#"
+        INSERT INTO command_executions (command, output, session_id, executed_at)
+        VALUES (?1, '', ?2, CURRENT_TIMESTAMP);
+    "#,
+        vec![
+            Value::Text(trimmed.to_string()),
+            Value::Text(session_id.to_string()),
+        ],
+    )?;
+
+    Ok(())
+}
+
+pub fn import_shell_history_to_db(pool: &SqlitePool, files: &[PathBuf]) -> Result<()> {
+    let lines = load_history_lines(files.to_vec(), true)?; // unique=true to avoid duplicates in memory
+
+    for command in lines {
+        let trimmed = command.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let hash = hash_command(trimmed);
+
+        // Insert into history table with source='shell'
+        // On conflict, just increment count (don't change source from 'tui' to 'shell')
+        pool.execute(
+            r#"
+            INSERT INTO history (command, hash, count, source, output)
+            VALUES (?1, ?2, 1, 'shell', '')
+            ON CONFLICT(hash) DO UPDATE SET
+                count = count + 1,
+                created_at = CURRENT_TIMESTAMP;
+        "#,
+            vec![
+                Value::Text(trimmed.to_string()),
+                Value::Text(hash),
+            ],
+        ).ok(); // Ignore errors for individual commands
+    }
+
+    Ok(())
 }
 
 #[derive(Debug)]

@@ -26,16 +26,17 @@ pub enum KeyResult {
     RunCommand(String),
 }
 
-pub fn run_tui(files: Vec<PathBuf>, top: usize, unique: bool) -> Result<Option<String>> {
+pub fn run_tui(
+    files: Vec<PathBuf>,
+    top: usize,
+    unique: bool,
+    pool: Option<SqlitePool>,
+    enable_llm: bool,
+    llm_model: Option<PathBuf>,
+    llm_which: String,
+) -> Result<Option<String>> {
     let corpus = core::load_history_lines(files, unique)?;
-    let pool = match SqlitePool::open_default() {
-        Ok(p) => Some(p),
-        Err(err) => {
-            warn!("failed to open sqlite history store: {err:?}");
-            None
-        }
-    };
-    let mut app = core::App::new(corpus, top, pool);
+    let mut app = core::App::new(corpus, top, pool, enable_llm, llm_model, llm_which)?;
 
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
@@ -481,7 +482,10 @@ fn execute_in_terminal(command: &str) -> Result<()> {
 
     println!("\n$ {}\n", command);
 
-    Command::new("/bin/sh")
+    // Use the user's shell from $SHELL, fallback to /bin/sh
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+
+    Command::new(shell)
         .arg("-lc")
         .arg(command)
         .status()?;
@@ -501,11 +505,56 @@ fn wait_for_enter() -> Result<()> {
     Ok(())
 }
 
-pub fn run_tui_loop(files: Vec<PathBuf>, top: usize, unique: bool) -> Result<()> {
+pub fn run_tui_loop(
+    files: Vec<PathBuf>,
+    top: usize,
+    unique: bool,
+    enable_llm: bool,
+    llm_model: Option<PathBuf>,
+    llm_which: String,
+) -> Result<()> {
+    // Generate session ID for this TUI session
+    let session_id = format!("tui-{}-{}", std::process::id(), std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis());
+
+    // Open database pool once for the entire session
+    let pool = match SqlitePool::open_default() {
+        Ok(p) => Some(p),
+        Err(err) => {
+            warn!("failed to open sqlite history store: {err:?}");
+            None
+        }
+    };
+
+    // Import shell history files into database on startup
+    if let Some(ref p) = pool {
+        if let Err(e) = core::import_shell_history_to_db(p, &files) {
+            warn!("failed to import shell history: {e:?}");
+        }
+    }
+
     loop {
-        match run_tui(files.clone(), top, unique)? {
+        match run_tui(
+            files.clone(),
+            top,
+            unique,
+            pool.clone(),
+            enable_llm,
+            llm_model.clone(),
+            llm_which.clone(),
+        )? {
             Some(command) => {
                 execute_in_terminal(&command)?;
+
+                // Save command to database
+                if let Some(ref p) = pool {
+                    if let Err(e) = core::persist_command_to_history(p, &command, &session_id) {
+                        warn!("failed to save command to history: {e:?}");
+                    }
+                }
+
                 wait_for_enter()?;
                 // Loop continues, TUI restarts
             }
