@@ -33,10 +33,9 @@ pub fn run_tui(
     pool: Option<SqlitePool>,
     enable_llm: bool,
     llm_model: Option<PathBuf>,
-    llm_which: String,
 ) -> Result<Option<String>> {
     let corpus = core::load_history_lines(files, unique)?;
-    let mut app = core::App::new(corpus, top, pool, enable_llm, llm_model, llm_which)?;
+    let mut app = core::App::new(corpus, top, pool, enable_llm, llm_model)?;
 
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
@@ -74,6 +73,11 @@ pub fn run_tui(
                 Event::Resize(_, _) => {}
                 _ => {}
             }
+        }
+
+        // Check if we should refresh suggestions (debounce)
+        if app.should_refresh_suggestions() {
+            app.refresh_suggestions();
         }
 
         if should_quit {
@@ -177,7 +181,7 @@ pub fn handle_key(
                 app.cursor -= 1;
                 app.output_lines.clear(); // Clear output when typing
                 app.output_scroll = 0; // Reset scroll
-                app.refresh_suggestions();
+                app.mark_input_changed(); // Debounced refresh
             }
         }
         (KeyCode::Delete, _) if app.current_tab == core::Tab::Main => {
@@ -185,7 +189,7 @@ pub fn handle_key(
                 app.input.remove(app.cursor);
                 app.output_lines.clear(); // Clear output when typing
                 app.output_scroll = 0; // Reset scroll
-                app.refresh_suggestions();
+                app.mark_input_changed(); // Debounced refresh
             }
         }
         (KeyCode::Home, _) if app.current_tab == core::Tab::Main => {
@@ -205,13 +209,13 @@ pub fn handle_key(
             app.cursor += 1;
             app.output_lines.clear(); // Clear output when typing
             app.output_scroll = 0; // Reset scroll
-            app.refresh_suggestions();
+            app.mark_input_changed(); // Debounced refresh
         }
         (KeyCode::Tab, _) if app.current_tab == core::Tab::Main => {
             if let Some(sel) = app.suggestions.get(app.selected).cloned() {
                 app.input = sel;
                 app.cursor = app.input.len();
-                app.refresh_suggestions();
+                app.mark_input_changed(); // Debounced refresh
             }
         }
 
@@ -511,7 +515,6 @@ pub fn run_tui_loop(
     unique: bool,
     enable_llm: bool,
     llm_model: Option<PathBuf>,
-    llm_which: String,
 ) -> Result<()> {
     // Generate session ID for this TUI session
     let session_id = format!("tui-{}-{}", std::process::id(), std::time::SystemTime::now()
@@ -543,7 +546,6 @@ pub fn run_tui_loop(
             pool.clone(),
             enable_llm,
             llm_model.clone(),
-            llm_which.clone(),
         )? {
             Some(command) => {
                 execute_in_terminal(&command)?;

@@ -37,13 +37,9 @@ enum Cmd {
         #[arg(long, default_value_t = false)]
         enable_llm: bool,
 
-        /// Path to GGUF model file (optional, downloads from HF if not provided)
+        /// Path to GGUF model file for llama-cli
         #[arg(long)]
         llm_model: Option<PathBuf>,
-
-        /// LLM model variant (0.5b, 1.5b, 7b)
-        #[arg(long, default_value = "0.5b")]
-        llm_which: String,
     },
 
     /// Non-TUI fuzzy search (existing behavior)
@@ -69,8 +65,7 @@ fn main() -> Result<()> {
             unique,
             enable_llm,
             llm_model,
-            llm_which,
-        }) => tui::run_tui_loop(files, top, unique, enable_llm, llm_model, llm_which),
+        }) => tui::run_tui_loop(files, top, unique, enable_llm, llm_model),
         Some(Cmd::Search {
             files,
             query,

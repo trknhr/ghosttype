@@ -12,9 +12,10 @@ use std::cmp::Ordering;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use crate::model::{
-    AliasModel, EnsembleBuilder, FreqModel, LlmConfig, LlmModel, LlmWhich, PrefixModel,
+    AliasModel, EnsembleBuilder, FreqModel, LlmConfig, LlmModel, PrefixModel,
     SqlitePool, SuggestModel, Suggestion,
 };
 use crate::model::ensemble::Ensemble;
@@ -104,6 +105,10 @@ pub struct App {
 
     // ensemble for multi-model suggestions
     pub ensemble: Ensemble,
+
+    // debounce state for suggestion refresh
+    pub last_input_time: Option<Instant>,
+    pub pending_refresh: bool,
 }
 
 impl App {
@@ -113,7 +118,6 @@ impl App {
         db: Option<SqlitePool>,
         enable_llm: bool,
         llm_model: Option<PathBuf>,
-        llm_which: String,
     ) -> Result<Self> {
         // Load recent history from database
         let history = if let Some(ref pool) = db {
@@ -135,13 +139,16 @@ impl App {
 
         // Add LLM model if enabled
         if enable_llm {
-            let which = LlmWhich::from_str(&llm_which).unwrap_or(LlmWhich::W0_5b);
-            let llm_config = LlmConfig {
-                model_path: llm_model,
-                which,
-                ..Default::default()
-            };
-            builder = builder.with_light_model(LlmModel::new(llm_config));
+            if let Some(model_path) = llm_model {
+                let llm_config = LlmConfig {
+                    model_path,
+                    ..Default::default()
+                };
+                builder = builder.with_light_model(LlmModel::new(llm_config));
+            } else {
+                use log::warn;
+                warn!("--enable-llm specified but --llm-model not provided");
+            }
         }
 
         let ensemble = builder.build();
@@ -166,6 +173,8 @@ impl App {
             history_scroll: 0,
             corpus,
             ensemble,
+            last_input_time: None,
+            pending_refresh: false,
         })
     }
 
@@ -208,6 +217,29 @@ impl App {
         }
 
         self.selected = self.selected.min(self.suggestions.len().saturating_sub(1));
+        self.pending_refresh = false; // Clear pending flag after refresh
+    }
+
+    /// Mark that input has changed, but defer the actual suggestion refresh (debounce)
+    pub fn mark_input_changed(&mut self) {
+        self.last_input_time = Some(Instant::now());
+        self.pending_refresh = true;
+    }
+
+    /// Check if enough time has passed since last input to refresh suggestions
+    /// Debounce delay: 300ms
+    pub fn should_refresh_suggestions(&self) -> bool {
+        const DEBOUNCE_MS: u64 = 300;
+
+        if !self.pending_refresh {
+            return false;
+        }
+
+        if let Some(last_time) = self.last_input_time {
+            last_time.elapsed() >= Duration::from_millis(DEBOUNCE_MS)
+        } else {
+            false
+        }
     }
 
 }

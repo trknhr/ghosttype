@@ -1,357 +1,136 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::process::{Command, Stdio};
 
-use anyhow::{Context, Result};
-use candle_core::{Device, Tensor};
-use candle_core::quantized::gguf_file;
-use candle_transformers::generation::{LogitsProcessor, Sampling};
-use candle_transformers::models::quantized_qwen2::ModelWeights as Qwen2;
+use anyhow::{bail, Result};
 use log::{info, warn};
-use tokenizers::Tokenizer;
 
 use super::{SuggestModel, Suggestion};
 
-/// Which Qwen2 model variant to use
-#[derive(Debug, Clone, Copy)]
-pub enum Which {
-    W0_5b,
-    W1_5b,
-    W7b,
-}
-
-impl Which {
-    pub fn from_str(s: &str) -> Result<Self> {
-        match s {
-            "0.5b" => Ok(Which::W0_5b),
-            "1.5b" => Ok(Which::W1_5b),
-            "7b" => Ok(Which::W7b),
-            _ => anyhow::bail!("Unknown model variant: {}", s),
-        }
-    }
-
-    fn repo(&self) -> &'static str {
-        match self {
-            Which::W0_5b => "unsloth/Qwen2.5-Coder-0.5B-Instruct-GGUF",
-            Which::W1_5b => "Qwen/Qwen2-1.5B-Instruct-GGUF",
-            Which::W7b => "Qwen/Qwen2-7B-Instruct-GGUF",
-        }
-    }
-
-    fn filename(&self) -> &'static str {
-        match self {
-            Which::W0_5b => "Qwen2.5-Coder-0.5B-Instruct-Q4_K_M.gguf",
-            Which::W1_5b => "qwen2-1_5b-instruct-q4_0.gguf",
-            Which::W7b => "qwen2-7b-instruct-q4_0.gguf",
-        }
-    }
-
-    fn tokenizer_repo(&self) -> &'static str {
-        match self {
-            Which::W0_5b => "Qwen/Qwen2.5-Coder-0.5B-Instruct",
-            Which::W1_5b => "Qwen/Qwen2-1.5B-Instruct",
-            Which::W7b => "Qwen/Qwen2-7B-Instruct",
-        }
-    }
-}
-
-/// Configuration for the LLM model
+/// Configuration for LLM model using external llama-cli
 #[derive(Debug, Clone)]
 pub struct LlmConfig {
-    pub model_path: Option<PathBuf>,
-    pub which: Which,
+    pub model_path: PathBuf,
     pub temperature: f64,
-    pub repeat_penalty: f32,
-    pub repeat_last_n: usize,
-    pub max_new_tokens: usize,
+    pub max_tokens: usize,
     pub seed: u64,
 }
 
 impl Default for LlmConfig {
     fn default() -> Self {
         Self {
-            model_path: None,
-            which: Which::W0_5b,
-            temperature: 0.8,
-            repeat_penalty: 1.0,
-            repeat_last_n: 32,
-            max_new_tokens: 12,
+            model_path: PathBuf::new(), // Will be set by CLI args
+            temperature: 0.05,
+            max_tokens: 3,
             seed: 299792458,
         }
     }
 }
 
-/// Loaded model state (heavy, kept in memory)
-struct ModelState {
-    model: Qwen2,
-    tokenizer: Tokenizer,
-    device: Device,
-    eos_token: u32,
-    config: LlmConfig,
-}
-
-impl std::fmt::Debug for ModelState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ModelState")
-            .field("device", &self.device)
-            .field("eos_token", &self.eos_token)
-            .field("config", &self.config)
-            .field("model", &"<Qwen2 model>")
-            .field("tokenizer", &"<Tokenizer>")
-            .finish()
-    }
-}
-
-impl ModelState {
-    fn load(config: &LlmConfig) -> Result<Self> {
-        info!("Loading LLM model ({})", match config.which {
-            Which::W0_5b => "0.5B",
-            Which::W1_5b => "1.5B",
-            Which::W7b => "7B",
-        });
-
-        let device = Device::Cpu;
-
-        // Get model path (from arg or download from HF)
-        let model_path = match &config.model_path {
-            Some(path) => path.clone(),
-            None => {
-                info!("Downloading model from HuggingFace...");
-                let api = hf_hub::api::sync::Api::new()?;
-                let repo = api.repo(hf_hub::Repo::model(config.which.repo().to_string()));
-                repo.get(config.which.filename())?
-            }
-        };
-
-        // Load GGUF model
-        let mut file = std::fs::File::open(&model_path)
-            .with_context(|| format!("Failed to open model file: {:?}", model_path))?;
-
-        let content = gguf_file::Content::read(&mut file)
-            .map_err(|e| anyhow::anyhow!("Failed to read GGUF: {}", e))?;
-
-        let model = Qwen2::from_gguf(content, &mut file, &device)
-            .context("Failed to load Qwen2 model from GGUF")?;
-
-        // Get tokenizer (from arg or download from HF)
-        let tokenizer = {
-            let api = hf_hub::api::sync::Api::new()?;
-            let repo = api.model(config.which.tokenizer_repo().to_string());
-            let tokenizer_path = repo.get("tokenizer.json")?;
-            Tokenizer::from_file(tokenizer_path)
-                .map_err(|e| anyhow::anyhow!("Failed to load tokenizer: {}", e))?
-        };
-
-        // Get EOS token
-        let eos_token = *tokenizer
-            .get_vocab(true)
-            .get("<|im_end|>")
-            .ok_or_else(|| anyhow::anyhow!("EOS token not found in vocabulary"))?;
-
-        info!("LLM model loaded successfully");
-
-        Ok(Self {
-            model,
-            tokenizer,
-            device,
-            eos_token,
-            config: config.clone(),
-        })
-    }
-
-    fn generate_suggestions(&mut self, prefix: &str, n: usize) -> Result<Vec<String>> {
-        // Format FIM prompt
-        let prompt_str = format!("<|fim_prefix|>{}<|fim_suffix|><|fim_middle|>", prefix);
-
-        // Tokenize
-        let tokens = self
-            .tokenizer
-            .encode(prompt_str, true)
-            .map_err(|e| anyhow::anyhow!("Tokenization failed: {}", e))?;
-        let prefix_tokens = tokens.get_ids();
-
-        // Sampling config
-        let sampling = if self.config.temperature <= 0.0 {
-            Sampling::ArgMax
-        } else {
-            Sampling::All {
-                temperature: self.config.temperature,
-            }
-        };
-
-        let mut out = Vec::new();
-        let mut seen = HashSet::new();
-        let mut seed_base = self.config.seed;
-
-        let max_attempts = n * 2; // Allow more attempts to get n unique results
-        let mut attempts = 0;
-
-        while out.len() < n && attempts < max_attempts {
-            attempts += 1;
-
-            match self.generate_single_line(prefix_tokens, sampling.clone(), seed_base) {
-                Ok(cand) => {
-                    seed_base = seed_base.wrapping_add(1);
-
-                    // Skip empty results
-                    if cand.is_empty() {
-                        continue;
-                    }
-
-                    // Normalize and deduplicate
-                    let cand = cand.trim().to_string();
-                    if !cand.is_empty() && seen.insert(cand.clone()) {
-                        out.push(cand);
-                    }
-                }
-                Err(e) => {
-                    warn!("LLM generation attempt {} failed: {}", attempts, e);
-                    seed_base = seed_base.wrapping_add(1);
-                }
-            }
-        }
-
-        Ok(out)
-    }
-
-    fn generate_single_line(
-        &mut self,
-        prefix_tokens: &[u32],
-        sampling: Sampling,
-        seed: u64,
-    ) -> Result<String> {
-        let mut lp = LogitsProcessor::from_sampling(seed, sampling);
-
-        // All tokens for repeat penalty
-        let mut all_tokens: Vec<u32> = prefix_tokens.to_vec();
-
-        // Warm up: forward through prompt without sampling
-        let mut last_logits = None;
-        for (pos, tk) in prefix_tokens.iter().enumerate() {
-            let input = Tensor::new(&[*tk], &self.device)?.unsqueeze(0)?;
-            let logits = self.model.forward(&input, pos)?.squeeze(0)?;
-            last_logits = Some(logits);
-        }
-
-        // Sample first token from prompt's final logits
-        let mut next_token = {
-            let logits = last_logits.ok_or_else(|| anyhow::anyhow!("No logits from prompt"))?;
-            lp.sample(&logits)?
-        };
-        all_tokens.push(next_token);
-
-        // Generate until newline, EOS, or max tokens
-        let mut generated = String::new();
-        for i in 0..self.config.max_new_tokens {
-            if next_token == self.eos_token {
-                break;
-            }
-
-            // Decode token
-            if let Some(piece) = self.tokenizer.decode(&[next_token], false).ok() {
-                // Stop at first newline
-                if let Some(nl) = piece.find('\n') {
-                    generated.push_str(&piece[..nl]);
-                    break;
-                } else {
-                    generated.push_str(&piece);
-                }
-            }
-
-            // Generate next token
-            let input = Tensor::new(&[next_token], &self.device)?.unsqueeze(0)?;
-            let mut logits = self
-                .model
-                .forward(&input, prefix_tokens.len() + i)?
-                .squeeze(0)?;
-
-            // Apply repeat penalty
-            if self.config.repeat_penalty != 1.0 {
-                let start_at = all_tokens.len().saturating_sub(self.config.repeat_last_n);
-                logits = candle_transformers::utils::apply_repeat_penalty(
-                    &logits,
-                    self.config.repeat_penalty,
-                    &all_tokens[start_at..],
-                )?;
-            }
-
-            next_token = lp.sample(&logits)?;
-            all_tokens.push(next_token);
-        }
-
-        Ok(generated.trim().to_string())
-    }
-}
-
-/// LLM-based suggestion model
+/// LLM-based suggestion model using external llama-cli command
 #[derive(Debug)]
 pub struct LlmModel {
-    config: Arc<LlmConfig>,
-    state: Arc<Mutex<Option<ModelState>>>,
+    config: LlmConfig,
+    llama_cli_available: bool,
 }
 
 impl LlmModel {
     /// Create a new LLM model with the given configuration
     pub fn new(config: LlmConfig) -> Self {
+        let available = check_llama_cli_available();
+
+        if !available {
+            warn!("llama-cli not found. LLM suggestions will be disabled.");
+            warn!("Install llama.cpp: brew install llama.cpp");
+        } else {
+            info!("llama-cli found. LLM suggestions enabled with model: {:?}", config.model_path);
+        }
+
         Self {
-            config: Arc::new(config),
-            state: Arc::new(Mutex::new(None)),
+            config,
+            llama_cli_available: available,
         }
     }
 
-    /// Create with default configuration
-    pub fn with_defaults() -> Self {
-        Self::new(LlmConfig::default())
-    }
+    /// Call llama-cli once to generate a single suggestion
+    fn call_llama_cli(&self, input: &str, seed: u64) -> Result<String> {
+        // Format few-shot prompt with examples
+        let prompt = format!(
+            "git s→status\ndocker p→ps\nnpm i→install\n{}→",
+            input
+        );
 
-    /// Create with custom model path and variant
-    pub fn with_model(model_path: Option<PathBuf>, which: Which) -> Self {
-        Self::new(LlmConfig {
-            model_path,
-            which,
-            ..Default::default()
-        })
+        let output = Command::new("llama-cli")
+            .arg("-m")
+            .arg(&self.config.model_path)
+            .arg("-p")
+            .arg(&prompt)
+            .arg("-n")
+            .arg(self.config.max_tokens.to_string())
+            .arg("--temp")
+            .arg(self.config.temperature.to_string())
+            .arg("--top-k")
+            .arg("1")
+            .arg("--seed")
+            .arg(seed.to_string())
+            .arg("--no-display-prompt")
+            .arg("--reverse-prompt")
+            .arg("\n")
+            .arg("-no-cnv") // Disable conversation mode
+            .stderr(Stdio::null()) // Suppress stderr output
+            .output()?;
+
+        if !output.status.success() {
+            bail!("llama-cli exited with status: {}", output.status);
+        }
+
+        let text = String::from_utf8_lossy(&output.stdout);
+        Ok(parse_llama_output(&text))
     }
 }
 
 impl SuggestModel for LlmModel {
     fn predict(&self, input: &str) -> Result<Vec<Suggestion>> {
+        // Skip if llama-cli is not available
+        if !self.llama_cli_available {
+            return Ok(Vec::new());
+        }
+
         // Skip if input is too short
         if input.trim().len() < 2 {
             return Ok(Vec::new());
         }
 
-        // Lazy load model on first call
-        let mut state_lock = self.state.lock().unwrap();
+        let mut suggestions = Vec::new();
+        let mut seen = HashSet::new();
 
-        if state_lock.is_none() {
-            match ModelState::load(&self.config) {
-                Ok(state) => {
-                    *state_lock = Some(state);
+        // Try up to 10 times to get 5 unique suggestions
+        for i in 0..10 {
+            if suggestions.len() >= 5 {
+                break;
+            }
+
+            match self.call_llama_cli(input, self.config.seed + i) {
+                Ok(text) => {
+                    let trimmed = text.trim().to_string();
+
+                    // Skip empty results
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+
+                    // Add only unique suggestions
+                    if seen.insert(trimmed.clone()) {
+                        suggestions.push(Suggestion::with_source(trimmed, 1.0, "llm"));
+                    }
                 }
                 Err(e) => {
-                    warn!("Failed to load LLM model: {}. LLM suggestions disabled.", e);
-                    return Ok(Vec::new());
+                    warn!("llama-cli call {} failed: {}", i, e);
                 }
             }
         }
 
-        let state = match state_lock.as_mut() {
-            Some(s) => s,
-            None => return Ok(Vec::new()),
-        };
-
-        // Generate 5 suggestions
-        match state.generate_suggestions(input, 5) {
-            Ok(results) => Ok(results
-                .into_iter()
-                .map(|cmd| Suggestion::with_source(cmd, 1.0, "llm"))
-                .collect()),
-            Err(e) => {
-                warn!("LLM generation failed: {}", e);
-                Ok(Vec::new())
-            }
-        }
+        Ok(suggestions)
     }
 
     fn weight(&self) -> f64 {
@@ -359,15 +138,80 @@ impl SuggestModel for LlmModel {
     }
 }
 
+/// Check if llama-cli command is available
+fn check_llama_cli_available() -> bool {
+    Command::new("llama-cli")
+        .arg("--help")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Parse llama-cli output to extract only the generated text
+/// Removes any metadata, timing info, or prompts
+fn parse_llama_output(text: &str) -> String {
+    // llama-cli with --simple-io should give clean output,
+    // but we still need to handle potential artifacts
+
+    let lines: Vec<&str> = text.lines().collect();
+
+    if lines.is_empty() {
+        return String::new();
+    }
+
+    // Find the first non-empty line that looks like actual output
+    // Skip lines that are obviously metadata or prompts
+    for line in &lines {
+        let trimmed = line.trim();
+
+        // Skip empty lines
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        // Skip lines that look like metadata
+        if trimmed.starts_with("llama_")
+            || trimmed.starts_with("sampling")
+            || trimmed.contains("ms / ")
+            || trimmed.contains("tok/s")
+            || trimmed.starts_with("Log") {
+            continue;
+        }
+
+        // Return the first line that looks like actual generated text
+        return trimmed.to_string();
+    }
+
+    // If we didn't find anything good, return the first non-empty line
+    lines.iter()
+        .map(|l| l.trim())
+        .find(|l| !l.is_empty())
+        .unwrap_or("")
+        .to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_which_from_str() {
-        assert!(matches!(Which::from_str("0.5b"), Ok(Which::W0_5b)));
-        assert!(matches!(Which::from_str("1.5b"), Ok(Which::W1_5b)));
-        assert!(matches!(Which::from_str("7b"), Ok(Which::W7b)));
-        assert!(Which::from_str("invalid").is_err());
+    fn test_parse_llama_output() {
+        let output = "status\n";
+        assert_eq!(parse_llama_output(output), "status");
+
+        let output_with_metadata = "llama_model_loader: loaded meta data\nstatus\n";
+        assert_eq!(parse_llama_output(output_with_metadata), "status");
+
+        let empty = "";
+        assert_eq!(parse_llama_output(empty), "");
+    }
+
+    #[test]
+    fn test_check_llama_cli() {
+        // This will fail in environments without llama-cli, which is OK
+        let available = check_llama_cli_available();
+        println!("llama-cli available: {}", available);
     }
 }
