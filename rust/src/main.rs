@@ -33,11 +33,19 @@ enum Cmd {
         #[arg(long, default_value_t = true)]
         unique: bool,
 
+        /// Enable embedding-based suggestions
+        #[arg(long, default_value_t = true)]
+        enable_embedding: bool,
+
+        /// Path to GGUF model file for llama-embedding
+        #[arg(long)]
+        embedding_model: Option<PathBuf>,
+
         /// Enable LLM-based suggestions
         #[arg(long, default_value_t = false)]
         enable_llm: bool,
 
-        /// Path to GGUF model file for llama-cli
+        /// Path to GGUF model file for llama-embedding / llama-cli
         #[arg(long)]
         llm_model: Option<PathBuf>,
     },
@@ -63,9 +71,19 @@ fn main() -> Result<()> {
             files,
             top,
             unique,
+            enable_embedding,
+            embedding_model,
             enable_llm,
             llm_model,
-        }) => tui::run_tui_loop(files, top, unique, enable_llm, llm_model),
+        }) => tui::run_tui_loop(
+            files,
+            top,
+            unique,
+            enable_embedding,
+            embedding_model,
+            enable_llm,
+            llm_model,
+        ),
         Some(Cmd::Search {
             files,
             query,

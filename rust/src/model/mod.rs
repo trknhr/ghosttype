@@ -1,4 +1,5 @@
 pub mod alias;
+pub mod embedding;
 pub mod ensemble;
 pub mod freq;
 pub mod llm;
@@ -7,6 +8,7 @@ pub mod sqlite;
 pub mod suggestion;
 
 pub use alias::AliasModel;
+pub use embedding::{EmbeddingModel, EmbeddingStore, LlamaEmbeddingClient};
 pub use ensemble::EnsembleBuilder;
 pub use freq::FreqModel;
 pub use llm::{LlmConfig, LlmModel};

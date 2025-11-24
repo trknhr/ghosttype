@@ -16,6 +16,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph};
 use ratatui::{Frame, Terminal};
+use std::borrow::Cow;
 use std::io::Stdout;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -31,11 +32,31 @@ pub fn run_tui(
     top: usize,
     unique: bool,
     pool: Option<SqlitePool>,
+    enable_embedding: bool,
+    embedding_model: Option<PathBuf>,
     enable_llm: bool,
     llm_model: Option<PathBuf>,
-) -> Result<Option<String>> {
+    initial_input: Option<String>,
+) -> Result<(Option<String>, String)> {
     let corpus = core::load_history_lines(files, unique)?;
-    let mut app = core::App::new(corpus, top, pool, enable_llm, llm_model)?;
+    let mut app = core::App::new(
+        corpus,
+        top,
+        pool,
+        enable_embedding,
+        embedding_model,
+        enable_llm,
+        llm_model,
+    )?;
+
+    // Restore any previously retained input
+    if let Some(initial_input) = initial_input {
+        app.input = initial_input;
+        app.cursor = app.input.len();
+        if !app.input.trim().is_empty() {
+            app.refresh_suggestions();
+        }
+    }
 
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
@@ -80,6 +101,9 @@ pub fn run_tui(
             app.refresh_suggestions();
         }
 
+        // Poll for heavy model results (non-blocking)
+        app.poll_heavy_model_results();
+
         if should_quit {
             break;
         }
@@ -92,7 +116,8 @@ pub fn run_tui(
     disable_raw_mode()?;
     stdout.execute(LeaveAlternateScreen)?;
     stdout.execute(DisableMouseCapture)?;
-    Ok(command_to_run)
+    let final_input = app.input.clone();
+    Ok((command_to_run, final_input))
 }
 
 pub fn handle_key(
@@ -267,6 +292,99 @@ fn point_in_rect(x: u16, y: u16, r: Rect) -> bool {
     x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height
 }
 
+fn normalized_command_for_display<'a>(text: &'a str) -> Cow<'a, str> {
+    let trimmed_ws = text.trim_end_matches(|c| c == ' ' || c == '\t');
+    if trimmed_ws.ends_with('\\') {
+        Cow::Owned(trimmed_ws[..trimmed_ws.len().saturating_sub(1)].to_string())
+    } else if trimmed_ws.len() != text.len() {
+        Cow::Owned(trimmed_ws.to_string())
+    } else {
+        Cow::Borrowed(text)
+    }
+}
+
+fn lines_from_display_text(target: &str) -> Vec<Line<'static>> {
+    target
+        .split('\n')
+        .map(|segment| {
+            if segment.trim().is_empty() {
+                Line::from(" ")
+            } else {
+                Line::from(segment.to_string())
+            }
+        })
+        .collect()
+}
+
+fn format_command_lines_for_display(text: &str) -> Vec<Line<'static>> {
+    let normalized = normalized_command_for_display(text);
+    lines_from_display_text(normalized.as_ref())
+}
+
+fn input_lines_with_cursor(text: &str, cursor: usize) -> Vec<Line<'static>> {
+    let highlight = Style::default().add_modifier(Modifier::REVERSED);
+
+    if text.is_empty() {
+        return vec![Line::from(" ")];
+    }
+
+    let mut lines = Vec::new();
+    let mut offset = 0usize;
+
+    for raw_line in text.split('\n') {
+        let line_len = raw_line.len();
+        let cursor_in_line = cursor >= offset && cursor < offset + line_len;
+        let mut spans: Vec<Span<'static>> = Vec::new();
+
+        if cursor_in_line {
+            let col = cursor - offset;
+            let (left, rest) = raw_line.split_at(col);
+            if !left.is_empty() {
+                spans.push(Span::raw(left.to_string()));
+            }
+
+            let mut rest_chars = rest.chars();
+            if let Some(cursor_char) = rest_chars.next() {
+                let cursor_str = cursor_char.to_string();
+                spans.push(Span::styled(cursor_str, highlight));
+                let remaining = rest_chars.as_str();
+                if !remaining.is_empty() {
+                    spans.push(Span::raw(remaining.to_string()));
+                }
+            }
+        } else if raw_line.is_empty() {
+            spans.push(Span::raw(" ".to_string()));
+        } else {
+            spans.push(Span::raw(raw_line.to_string()));
+        }
+
+        lines.push(Line::from(spans));
+        offset += line_len + 1; // include newline
+    }
+
+    lines
+}
+
+fn cursor_line_col(display_text: &str, cursor: usize) -> (u16, u16) {
+    let mut line: u16 = 0;
+    let mut col: u16 = 0;
+
+    let target = cursor.min(display_text.len());
+    for (idx, ch) in display_text.char_indices() {
+        if idx >= target {
+            break;
+        }
+        if ch == '\n' {
+            line = line.saturating_add(1);
+            col = 0;
+        } else {
+            col = col.saturating_add(1);
+        }
+    }
+
+    (line, col)
+}
+
 // ---------------------
 // Rendering
 // ---------------------
@@ -392,9 +510,18 @@ fn draw_input(f: &mut Frame, area: Rect, app: &core::App) {
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL);
-    let text = vec![Line::from(app.input.as_str())];
+    let text = input_lines_with_cursor(app.input.as_str(), app.cursor);
     let p = Paragraph::new(text).block(block);
     f.render_widget(p, area);
+
+    if area.width > 2 && area.height > 2 {
+        let (line, col) = cursor_line_col(app.input.as_str(), app.cursor);
+        let inner_width = area.width - 2;
+        let inner_height = area.height - 2;
+        let clamped_col = col.min(inner_width.saturating_sub(1));
+        let clamped_line = line.min(inner_height.saturating_sub(1));
+        f.set_cursor(area.x + 1 + clamped_col, area.y + 1 + clamped_line);
+    }
 }
 
 fn draw_suggestions(f: &mut Frame, area: Rect, app: &core::App) {
@@ -408,7 +535,7 @@ fn draw_suggestions(f: &mut Frame, area: Rect, app: &core::App) {
             } else {
                 Style::default()
             };
-            ListItem::new(Line::from(Span::styled(s.clone(), style)))
+            ListItem::new(format_command_lines_for_display(s)).style(style)
         })
         .collect();
 
@@ -429,7 +556,7 @@ fn draw_history_list(f: &mut Frame, area: Rect, app: &core::App) {
             } else {
                 Style::default()
             };
-            ListItem::new(Line::from(Span::styled(&h.cmd, style)))
+            ListItem::new(format_command_lines_for_display(&h.cmd)).style(style)
         })
         .collect();
     let list = List::new(items).block(Block::default().title("Recent Commands").borders(Borders::ALL));
@@ -513,9 +640,15 @@ pub fn run_tui_loop(
     files: Vec<PathBuf>,
     top: usize,
     unique: bool,
+    enable_embedding: bool,
+    embedding_model: Option<PathBuf>,
     enable_llm: bool,
     llm_model: Option<PathBuf>,
 ) -> Result<()> {
+    // Create tokio runtime for async heavy model tasks
+    let runtime = tokio::runtime::Runtime::new()?;
+    let _enter = runtime.enter(); // Enter runtime context for entire session
+
     // Generate session ID for this TUI session
     let session_id = format!("tui-{}-{}", std::process::id(), std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -538,15 +671,24 @@ pub fn run_tui_loop(
         }
     }
 
+    let mut retained_input: Option<String> = None;
+
     loop {
-        match run_tui(
+        let (run_result, latest_input) = run_tui(
             files.clone(),
             top,
             unique,
             pool.clone(),
+            enable_embedding,
+            embedding_model.clone(),
             enable_llm,
             llm_model.clone(),
-        )? {
+            retained_input.take(),
+        )?;
+
+        retained_input = Some(latest_input.clone());
+
+        match run_result {
             Some(command) => {
                 execute_in_terminal(&command)?;
 

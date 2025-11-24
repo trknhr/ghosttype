@@ -8,15 +8,19 @@ use libsql::Value;
 use once_cell::sync::Lazy;
 use ratatui::layout::Rect;
 use sha2::{Digest, Sha256};
+use log::{info, warn};
 use std::cmp::Ordering;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 
 use crate::model::{
-    AliasModel, EnsembleBuilder, FreqModel, LlmConfig, LlmModel, PrefixModel,
-    SqlitePool, SuggestModel, Suggestion,
+    AliasModel, EmbeddingModel, EmbeddingStore, EnsembleBuilder, FreqModel,
+    LlamaEmbeddingClient, LlmConfig, LlmModel, PrefixModel, SqlitePool,
+    SuggestModel, Suggestion,
 };
 use crate::model::ensemble::Ensemble;
 
@@ -109,6 +113,12 @@ pub struct App {
     // debounce state for suggestion refresh
     pub last_input_time: Option<Instant>,
     pub pending_refresh: bool,
+
+    // async heavy model state
+    heavy_model_rx: Option<mpsc::UnboundedReceiver<Vec<Suggestion>>>,
+    heavy_model_tx: Option<mpsc::UnboundedSender<Vec<Suggestion>>>,
+    heavy_model_tasks: Vec<JoinHandle<()>>,
+    pending_heavy_model_query: Option<String>,
 }
 
 impl App {
@@ -116,6 +126,8 @@ impl App {
         corpus: Vec<String>,
         top: usize,
         db: Option<SqlitePool>,
+        enable_embedding: bool,
+        embedding_model: Option<PathBuf>,
         enable_llm: bool,
         llm_model: Option<PathBuf>,
     ) -> Result<Self> {
@@ -130,28 +142,54 @@ impl App {
         let mut builder = EnsembleBuilder::new().with_light_model(FuzzyHistoryModel::new(corpus.clone()));
 
         // Add database-backed models if available
-        if let Some(ref pool) = db {
-            builder = builder
-                .with_light_model(PrefixModel::new(pool.clone()))
-                .with_light_model(FreqModel::new(pool.clone()))
-                .with_light_model(AliasModel::with_sql_store(pool.clone()));
+        if enable_embedding {
+            if let Some(ref pool) = db {
+                builder = builder
+                    .with_light_model(PrefixModel::new(pool.clone()))
+                    .with_light_model(FreqModel::new(pool.clone()))
+                    .with_light_model(AliasModel::with_sql_store(pool.clone()));
+
+                match LlamaEmbeddingClient::from_env_or(embedding_model.clone()) {
+                    Ok(client) => {
+                        let store = EmbeddingStore::new(pool.clone());
+                        let embedding_model = EmbeddingModel::new(store, client);
+                        match embedding_model.warm_up() {
+                            Ok(_) => {
+                                if let Err(err) = embedding_model.learn(&corpus) {
+                                    warn!("embedding warmup failed: {err:?}");
+                                }
+                                builder = builder.with_heavy_model(embedding_model);
+                                info!("embedding model enabled via Ollama");
+                            }
+                            Err(err) => {
+                                warn!("skipping embedding model; Ollama embeddings unavailable: {err:?}");
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        warn!("failed to construct embedding client: {err:?}");
+                    }
+                }
+            }
         }
 
-        // Add LLM model if enabled
+        // Add LLM model as heavy model if enabled
         if enable_llm {
             if let Some(model_path) = llm_model {
                 let llm_config = LlmConfig {
                     model_path,
                     ..Default::default()
                 };
-                builder = builder.with_light_model(LlmModel::new(llm_config));
+                builder = builder.with_heavy_model(LlmModel::new(llm_config));
             } else {
-                use log::warn;
                 warn!("--enable-llm specified but --llm-model not provided");
             }
         }
 
         let ensemble = builder.build();
+
+        // Create channel for async heavy model results
+        let (tx, rx) = mpsc::unbounded_channel();
 
         Ok(Self {
             input: String::new(),
@@ -175,6 +213,10 @@ impl App {
             ensemble,
             last_input_time: None,
             pending_refresh: false,
+            heavy_model_rx: Some(rx),
+            heavy_model_tx: Some(tx),
+            heavy_model_tasks: Vec::new(),
+            pending_heavy_model_query: None,
         })
     }
 
@@ -185,10 +227,11 @@ impl App {
             return;
         }
 
-        let query = self.input.as_str();
+        let query_owned = self.input.clone();
+        let query = query_owned.as_str();
 
-        // Use ensemble for multi-model suggestions
-        match self.ensemble.predict(query) {
+        // Phase 1: Get quick suggestions from light models (non-blocking)
+        match self.ensemble.predict_light_models(query) {
             Ok(suggestions) => {
                 self.suggestions = suggestions
                     .into_iter()
@@ -199,7 +242,7 @@ impl App {
             Err(e) => {
                 // Fallback to simple fuzzy matching if ensemble fails
                 use log::warn;
-                warn!("Ensemble prediction failed: {}. Falling back to fuzzy matching.", e);
+                warn!("Light model prediction failed: {}. Falling back to fuzzy matching.", e);
 
                 let mut scored: Vec<(i64, String)> = Vec::new();
                 for line in self.corpus.iter() {
@@ -218,6 +261,9 @@ impl App {
 
         self.selected = self.selected.min(self.suggestions.len().saturating_sub(1));
         self.pending_refresh = false; // Clear pending flag after refresh
+
+        // Phase 2: Spawn background tasks for heavy models (non-blocking)
+        self.spawn_heavy_model_tasks(query);
     }
 
     /// Mark that input has changed, but defer the actual suggestion refresh (debounce)
@@ -240,6 +286,107 @@ impl App {
         } else {
             false
         }
+    }
+
+    /// Spawn background tasks for heavy model predictions
+    /// Cancels any previous tasks and spawns new ones
+    fn spawn_heavy_model_tasks(&mut self, query: &str) {
+        // Cancel all previous heavy model tasks
+        for handle in self.heavy_model_tasks.drain(..) {
+            handle.abort();
+        }
+
+        // Get heavy models from ensemble
+        let heavy_models = self.ensemble.get_heavy_models();
+
+        if heavy_models.is_empty() {
+            return; // No heavy models to run
+        }
+
+        // Save current query to detect if it changes
+        self.pending_heavy_model_query = Some(query.to_string());
+
+        let query = query.to_string();
+        let tx = match &self.heavy_model_tx {
+            Some(tx) => tx.clone(),
+            None => return,
+        };
+
+        // Spawn a task for each heavy model
+        for model in heavy_models {
+            let query = query.clone();
+            let tx = tx.clone();
+
+            let handle = tokio::spawn(async move {
+                // Run heavy model prediction in blocking task (subprocess calls)
+                let result = tokio::task::spawn_blocking(move || {
+                    model.predict(&query)
+                }).await;
+
+                // Send results through channel
+                if let Ok(Ok(suggestions)) = result {
+                    let _ = tx.send(suggestions);
+                }
+            });
+
+            self.heavy_model_tasks.push(handle);
+        }
+    }
+
+    /// Poll for heavy model results without blocking
+    /// Merges results into current suggestions if they arrive
+    pub fn poll_heavy_model_results(&mut self) {
+        let mut pending_results = Vec::new();
+        {
+            let rx = match &mut self.heavy_model_rx {
+                Some(rx) => rx,
+                None => return,
+            };
+
+            // Non-blocking check for results
+            while let Ok(heavy_suggestions) = rx.try_recv() {
+                pending_results.push(heavy_suggestions);
+            }
+        }
+
+        for heavy_suggestions in pending_results {
+            self.merge_heavy_model_suggestions(heavy_suggestions);
+        }
+    }
+
+    /// Merge heavy model suggestions into current suggestion list
+    /// Uses the same scoring logic as ensemble aggregation
+    fn merge_heavy_model_suggestions(&mut self, heavy_suggestions: Vec<Suggestion>) {
+        use std::collections::HashMap;
+
+        // Build a map of existing suggestions with their positions
+        let mut score_map: HashMap<String, f64> = HashMap::new();
+
+        for (idx, text) in self.suggestions.iter().enumerate() {
+            // Higher positt on = lower score in the list
+            let position_score = (self.suggestions.len() - idx) as f64;
+            score_map.insert(text.clone(), position_score);
+        }
+
+        // Add heavy model suggestions with their scores
+        for suggestion in heavy_suggestions {
+            let entry = score_map.entry(suggestion.text).or_insert(0.0);
+            *entry += suggestion.score;
+        }
+
+        // Re-rank all suggestions
+        let mut ranked: Vec<(String, f64)> = score_map.into_iter().collect();
+        ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+
+        // Update suggestions list
+        self.suggestions = ranked
+            .into_iter()
+            .take(self.max_suggestions)
+            .map(|(text, _)| text)
+            .collect();
+
+        // Adjust selection to stay in bounds
+        self.selected = self.selected.min(self.suggestions.len().saturating_sub(1));
     }
 
 }
