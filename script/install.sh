@@ -14,7 +14,7 @@ echo "🔍 Fetching latest release..."
 TAG=$(curl -s https://api.github.com/repos/$REPO/releases/latest | grep tag_name | cut -d '"' -f 4)
 
 echo "⬇️  Downloading $APP $TAG for $OS/$ARCH..."
-FILENAME="${APP}_main_${OS}_${ARCH}.tar.gz"
+FILENAME="${APP}_${TAG}_${OS}_${ARCH}.tar.gz"
 URL="https://github.com/$REPO/releases/download/$TAG/$FILENAME"
 echo "📦 URL: $URL"
 curl -L "$URL" -o "${APP}.tar.gz"

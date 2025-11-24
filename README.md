@@ -20,9 +20,9 @@ Using a hybrid of traditional and AI-enhanced models, Ghosttype intelligently su
 Ghosttype is still under active development.
 Expect occasional breaking changes. Contributions and issue reports are welcome!
 
-## 📊 Performance & Benchmarks
+> 0.3.0 switches the CLI over to the Rust implementation and ships prebuilt binaries via GitHub Releases.
 
-**Current Performance vs. Popular Tools**
+## 📊 Performance & Benchmarks
 
 We regularly benchmark Ghosttype against established command-line tools to track our progress:
 ```
@@ -85,13 +85,16 @@ $ git ch▍    # Press Ctrl+P (zsh Integration)
 curl -sL https://raw.githubusercontent.com/trknhr/ghosttype/main/script/install.sh | bash
 ```
 
-### Option 2: Go Install
+The script downloads the latest release archive for your OS/arch and installs a `ghosttype` binary to `/usr/local/bin`.
+
+### Option 2: Build From Source (Rust)
 
 ```bash
-go install github.com/trknhr/ghosttype@latest
+cd rust
+cargo install --path . --locked
 ```
 
-This will install the ghosttype command to your $GOBIN (usually ~/go/bin).
+This builds the Rust CLI and installs it to your cargo bin directory (usually `~/.cargo/bin`). You can also run `cargo build --release` and pick up the binary from `rust/target/release/ghosttype`.
 
 ## 🖥️ Zsh Integration
 
@@ -119,41 +122,39 @@ source ~/.zshrc
 
 Now press `Ctrl+P` in your terminal to trigger Ghosttype suggestions.
 
-## 🧠 Enable LLM-Powered Suggestions (via Ollama)
+## 🧠 Embeddings + LLM setup (llama.cpp)
 
-Ghosttype supports **LLM-based predictions and vector embeddings** powered by [Ollama](https://ollama.com/).
+Ghosttype uses the `llama-embedding` binary from [`llama.cpp`](https://github.com/ggerganov/llama.cpp) for vector embeddings.
 
-To use these features, follow the steps below:
+1) Install llama.cpp
 
-### 1. Install Ollama
-
-Download and install from the official site:  
-👉 [https://ollama.com/download](https://ollama.com/download)
-
-Verify installation:
+macOS (Homebrew):
 
 ```bash
-ollama --version
-``` 
-
-### 2. Pull required models
-Ghosttype uses the following models:
-
-`llama3.2` — for next-command prediction
-
-`nomic-embed-text` — for semantic similarity via embedding
-
-Download the models:
-
-```bash
-ollama run llama3.2:1b           # Starts and downloads the LLM model
-ollama pull nomic-embed-text  # Downloads the embedding model
+brew install llama.cpp
 ```
 
-ℹ️ ollama run llama3.2:1b must be running in the background to enable LLM-powered suggestions.
+2) Get an embedding model (GGUF)
 
-You can run it in a separate terminal window:
-Once Ollama is running and the models are downloaded, Ghosttype will automatically use them to enhance prediction accuracy.
+Download a compatible GGUF embedding model (e.g., `nomic-embed-text`) and note its path. You can place it anywhere; pass the path below.
+
+3) Run ghosttype with embeddings enabled (default)
+
+```bash
+ghosttype tui --embedding-model /path/to/your/model.gguf
+```
+
+Common flags:
+
+- `--enable-embedding=false` to skip embeddings entirely
+- `--enable-llm` / `--llm-model <path>` for the (optional) LLM generator
+
+Environment overrides:
+
+- `LLAMA_EMBED_BIN`: path to `llama-embedding` (defaults to the binary on PATH)
+- `LLAMA_EMBED_MODEL`: path to your GGUF model (used if `--embedding-model` is not provided)
+
+LLM suggestions remain optional: pass `--enable-llm` with `--llm-model /path/to/model.gguf` if you also want the LLM-based generator.
 
 ## 🧠 Architecture
 
@@ -163,7 +164,7 @@ Ghosttype uses an ensemble of models:
 * `freq`: Frequency-based suggestion engine
 * `alias`: Shell aliases from `.zshrc`/`.bashrc`
 * `context`: Targets from `Makefile`, `package.json`, `pom.xml`, etc.
-* `embedding`: LLM-generated vector search powered by `ollama`
+* `embedding`: Vector search powered by `llama-embedding` (llama.cpp)
 
 All models implement a unified `SuggestModel` interface and are combined via `ensemble.Model`.
 
@@ -171,11 +172,10 @@ All models implement a unified `SuggestModel` interface and are combined via `en
 
 ```
 .
-├── cmd/            # CLI (tui, suggest, root)
-├── internal/       # Logging, utils, alias sync
-├── script/         # Shell helper scripts
-├── main.go
-└── go.mod
+├── rust/             # Rust CLI implementation (primary)
+├── script/           # Helper scripts (install, etc.)
+├── testdata/         # Fixtures
+└── README.md
 ```
 
 

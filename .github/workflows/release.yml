@@ -12,26 +12,30 @@ on:
 
 env:
   APP_NAME: ghosttype
-  GO_VERSION: '1.24'
   RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.tag }}
 
 jobs:
-  # ───────────────────────────────
-  # Linux (amd64 / arm64)
-  # ───────────────────────────────
-  build-linux:
-    runs-on: ubuntu-latest
-
+  build:
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - goarch: amd64
-            cc: gcc
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive_os: linux
+            archive_arch: amd64
             install_cross: ''
-          - goarch: arm64
-            cc: aarch64-linux-gnu-gcc
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            archive_os: linux
+            archive_arch: arm64
             install_cross: gcc-aarch64-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive_os: darwin
+            archive_arch: arm64
+            install_cross: ''
 
     steps:
       - name: Checkout
@@ -45,80 +49,34 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ${{ matrix.install_cross }}
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          go-version: ${{ env.GO_VERSION }}
+          targets: ${{ matrix.target }}
 
-      - name: Build linux/${{ matrix.goarch }}
-        env:
-          GOOS: linux
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: '1'
-          CC: ${{ matrix.cc }}
-        run: |
-          mkdir -p bin
-          go build -tags=libsql -o bin/${{ env.APP_NAME }} ./main.go
+      - name: Configure cross linker
+        if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
+        run: echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+
+      - name: Build ${{ matrix.target }}
+        working-directory: rust
+        run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Package
         run: |
+          BIN_PATH=rust/target/${{ matrix.target }}/release/${{ env.APP_NAME }}
           mkdir -p dist
-          tar -C bin -czf dist/${{ env.APP_NAME }}_${{ github.ref_name }}_linux_${{ matrix.goarch }}.tar.gz ${{ env.APP_NAME }}
+          cp "$BIN_PATH" dist/${{ env.APP_NAME }}
+          tar -C dist -czf dist/${{ env.APP_NAME }}_${{ env.RELEASE_TAG }}_${{ matrix.archive_os }}_${{ matrix.archive_arch }}.tar.gz ${{ env.APP_NAME }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: linux-${{ matrix.goarch }}
+          name: ${{ matrix.archive_os }}-${{ matrix.archive_arch }}
           path: dist/*.tar.gz
 
-  # ───────────────────────────────
-  # macOS (amd64 / arm64)
-  # ───────────────────────────────
-  build-macos:
-    runs-on: macos-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        goarch: [ arm64 ]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Build darwin/${{ matrix.goarch }}
-        env:
-          GOOS: darwin
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: '1'
-        run: |
-          mkdir -p bin
-          go build -tags=libsql -o bin/${{ env.APP_NAME }} ./main.go
-
-      - name: Package
-        run: |
-          mkdir -p dist
-          tar -C bin -czf dist/${{ env.APP_NAME }}_${{ github.ref_name }}_darwin_${{ matrix.goarch }}.tar.gz ${{ env.APP_NAME }}
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: darwin-${{ matrix.goarch }}
-          path: dist/*.tar.gz
-  # ───────────────────────────────
-  # Release job (collect & publish)
-  # ───────────────────────────────
   release:
-    needs:
-      - build-linux
-      - build-macos
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -131,7 +89,7 @@ jobs:
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           files: dist/**/*.tar.gz
-          draft: false      
+          draft: false
           prerelease: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
